@@ -4,6 +4,7 @@ uniform mat4 u_ViewProjMatrix;
 uniform sampler2D s_Tex0;
 
 uniform float u_RenderingType;
+uniform vec4 u_Color;
 
 -- vs
 layout(location = 0) in vec3 vs_Position;
@@ -42,6 +43,12 @@ void main()
 	{
 		frag = fs_Color;
 		frag.a = texture2D(s_Tex0, fs_TexCoord).a;
+		return;
+	}
+	
+	if (u_RenderingType == 4) // uniform color
+	{
+		frag = u_Color;
 		return;
 	}
 }

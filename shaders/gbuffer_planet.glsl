@@ -1,7 +1,6 @@
 #version 400 core
 
-#include "atmosphere/common.h"
-const vec3 OceanColor = vec3(0, 0, 1);
+#include "common.h"
 
 uniform mat4 u_Deform_ScreenQuadCorners;
 uniform mat4 u_Deform_ScreenQuadVerticals;
@@ -18,9 +17,6 @@ uniform vec3 u_HeightNormal_TileCoords;
 uniform sampler2D s_HeightNormal_Slot0;
 uniform sampler2D s_HeightNormal_Slot1;
 
-uniform float u_OceanLevel;
-uniform bool u_DrawOcean;
-
 vec4 texTile(sampler2D tile, vec2 uv, vec3 tileCoords, vec3 tileSize) {
 	uv = tileCoords.xy + uv * tileSize.xy;
 	return texture2D(tile, uv);
@@ -32,13 +28,14 @@ layout(location = 1) in vec3 vs_Normal;
 layout(location = 2) in vec2 vs_TexCoord;
 out vec3 fs_Normal;
 out vec2 fs_TexCoord;
+out float fs_Flogz;
 out vec3 p;
 
 void main()
 {
 	vec2 zfc = texTile(s_HeightNormal_Slot0, vs_TexCoord, u_HeightNormal_TileCoords, u_HeightNormal_TileSize).xy;
-	
-	if	(zfc.x <= u_OceanLevel && u_DrawOcean) {
+    
+	if	(u_EnableLogZ && zfc.x <= u_OceanLevel) {
 		zfc = vec2(0, 0);
 	}
 	
@@ -60,9 +57,14 @@ void main()
 	float k = min(length(P) / dot(alpha, L) * 1.0000003, 1.0);
 	float hPrime = (h + R * (1.0 - k)) / k;	
 	
-	p = (u_Deform_Radius + h) * normalize(u_Deform_LocalToWorld * P);
-	
-	gl_Position = (C + hPrime * N) * alphaPrime;
+	p = (u_Deform_Radius + h) * normalize(u_Deform_LocalToWorld * P);	
+    gl_Position = (C + hPrime * N) * alphaPrime;
+    
+    if (u_EnableLogZ) {
+        gl_Position.z = log2(max(1e-6, 1.0 + gl_Position.w)) * Fcoef(u_CameraClip.y);
+        fs_Flogz = 1.0 + gl_Position.w;
+    }
+    
 	fs_Normal = vs_Normal;
 	fs_TexCoord = vs_TexCoord;
 }
@@ -80,27 +82,38 @@ void main()
 	float ht = texTile(s_HeightNormal_Slot0, fs_TexCoord, u_HeightNormal_TileCoords, u_HeightNormal_TileSize).x;
 	
 	vec3 fn;
-	fn.xy = texTile(s_HeightNormal_Slot1, fs_TexCoord, u_HeightNormal_TileCoords, u_HeightNormal_TileSize).xy;
+	fn.xy = texTile(s_HeightNormal_Slot1, fs_TexCoord, u_HeightNormal_TileCoords, u_HeightNormal_TileSize).xy * 2.0 - 1.0;
 	fn.z = sqrt(max(0.0, 1.0 - dot(fn.xy, fn.xy)));	
-	if	(ht <= u_OceanLevel && u_DrawOcean) {
+    
+	if	(u_EnableLogZ && ht <= u_OceanLevel) {
 		fn = vec3(0, 0, 1);		
 	}
 	
 	mat3 TTW = mat3(u_Deform_TangentFrameToWorld);
-    fn = TTW * fn;
+    fn = normalize(TTW * fn);
 	
 	vec3 color = vec3(0, 1, 0);
 	float roughness = 0.0f;
-	
-	if	(ht <= u_OceanLevel && u_DrawOcean) {
-		color = OceanColor;
-		roughness = 0.002f;
-	}
-	
-	if (gl_FragCoord.z >= 0.99998) {
-		color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, roughness, 1.0);
-	}
-	
+
+    if (u_EnableLogZ)
+    {
+        if (ht <= u_OceanLevel) {
+            color = vec3(0, 0, 1);
+            roughness = 0.008f;
+        }
+        
+        color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, 0.0, 1.0);
+        gl_FragDepth = log2(fs_Flogz) * 0.5 * Fcoef(u_CameraClip.y);
+    }
+    else {    
+        if (gl_FragCoord.z >= u_DepthSplit) {
+            float shadow = GetShadowFactor(p - vec3(0.0, 6360000.0, 0.0), gl_FragCoord.z);
+            color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, 0.0, shadow);
+        }
+        
+        gl_FragDepth = gl_FragCoord.z;
+    }
+    
 	diffuse = vec4(color, 1);
-	geometric = vec4(fn, roughness);
+	geometric = vec4(fn * 0.5 + 0.5, roughness);
 }

@@ -6,9 +6,9 @@ uniform vec2 AORes = vec2(RESOLUTION.x, RESOLUTION.y);
 uniform vec2 InvAORes = vec2(1.0/RESOLUTION.x, 1.0/RESOLUTION.y);
 uniform vec2 NoiseScale = vec2(RESOLUTION.x, RESOLUTION.y) / 4.0;
 
-uniform vec2 u_FocalLen;
 uniform vec2 u_UVToViewA;
 uniform vec2 u_UVToViewB;
+uniform vec2 u_FocalLen;
 uniform vec2 u_LinMAD;
 
 uniform sampler2D s_Tex0;

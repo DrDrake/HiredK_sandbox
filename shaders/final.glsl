@@ -1,6 +1,7 @@
 #version 400 core
 
 const int MAX_MOTION_SAMPLES = 64;
+
 uniform mat4 u_InvViewProjMatrix;
 uniform mat4 u_PreViewProjMatrix;
 uniform float u_MotionScale;
@@ -8,6 +9,7 @@ uniform float u_MotionScale;
 uniform sampler2D s_Tex0;
 uniform sampler2D s_Tex1;
 
+uniform bool u_EnableLensflare;
 uniform mat4 u_LensStarMatrix;
 uniform sampler2D s_Tex2;
 uniform sampler2D s_Tex3;
@@ -54,9 +56,14 @@ vec4 motion_blur()
 
 void main()
 {
-	vec4 lensMod = texture(s_Tex3, fs_TexCoord);
-	vec2 lensStarTexcoord = (u_LensStarMatrix * vec4(fs_TexCoord, 0.0, 1.0)).xy;
-	lensMod += texture(s_Tex4, lensStarTexcoord);
-	
-	frag = motion_blur() + (texture(s_Tex2, fs_TexCoord) * lensMod * 0.15);
+	frag = motion_blur();
+    
+    if (u_EnableLensflare)
+    {
+        vec4 lensMod = texture(s_Tex3, fs_TexCoord);
+        vec2 lensStarTexcoord = (u_LensStarMatrix * vec4(fs_TexCoord, 0.0, 1.0)).xy;
+        lensMod += texture(s_Tex4, lensStarTexcoord);
+        
+        frag += (texture(s_Tex2, fs_TexCoord) * lensMod * 0.25);
+    }
 }

@@ -6,7 +6,7 @@ uniform sampler2D s_Tex0;
 
 uniform vec2 u_BlurDirection;
 uniform float u_BlurSigma = 2.0;
-uniform int u_BlurRadius = 16;
+uniform int u_BlurRadius = 32;
 
 -- vs
 layout(location = 0) in vec3 vs_Position;

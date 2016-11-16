@@ -236,10 +236,10 @@ vec3 surfaceLighting(vec3 pos, vec3 color, vec3 camera, vec3 sun, vec3 N, float 
 	sunRadianceAndSkyIrradiance(P, N, sun, sunL, skyE);	
 	float cTheta = dot(N, sun) * shadow;
 	
-	vec3 result = color * 0.05; // surfaceRadiance(-v, N, sun, color, roughness, sunL, skyE) * 0.05;	
-	result = result * (sunL * max(cTheta, 0.0) + skyE) / M_PI;
+	vec3 result = color * 0.05; // surfaceRadiance(-v, N, sun, color, 0.01, sunL, skyE) * 0.05;	
+	result = result * (sunL * max(cTheta, 0.2) + skyE) / M_PI;
 	
 	vec3 extinction;
-	vec3 inscatter = inScattering(camera, P, sun, extinction, 0.0) * 0.05;
+	vec3 inscatter = inScattering(camera, P, sun, extinction, 0.0) * 0.08;
 	return result * extinction + inscatter;
 }

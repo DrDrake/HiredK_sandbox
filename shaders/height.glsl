@@ -1,5 +1,7 @@
 #version 400 core
 
+const int BORDER = 2;
+
 uniform sampler2D _PermTable2D;
 uniform sampler2D _Gradient3D;
 
@@ -137,8 +139,6 @@ void main() {
 in vec2 fs_UV;
 in vec2 fs_ST;
 out vec4 frag;
-
-const int BORDER = 2;
 
 float mdot(mat4 a, mat4 b) {
     return dot(a[0], b[0]) + dot(a[1], b[1]) + dot(a[2], b[2]) + dot(a[3], b[3]);

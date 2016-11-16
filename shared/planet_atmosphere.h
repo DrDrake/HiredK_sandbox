@@ -103,25 +103,22 @@ end
 
 function planet_atmosphere:bind(scale)
 
-	self:set_uniforms(scale)
-	
-	root.Shader.get():uniform("u_CameraPos", self.planet_.local_camera_.position)
-	root.Shader.get():uniform("u_SunDir", self.planet_.scene_.sun_:get_direction())
+    self:set_uniforms(scale)
 
-	gl.ActiveTexture(gl.TEXTURE5)
-	root.Shader.get():sampler("transmittanceSampler", 5)
+	gl.ActiveTexture(gl.TEXTURE7)
+	root.Shader.get():sampler("transmittanceSampler", 7)
 	self.transmittance_tex_:bind()
 	
-	gl.ActiveTexture(gl.TEXTURE6)
-	root.Shader.get():sampler("skyIrradianceSampler", 6)
+	gl.ActiveTexture(gl.TEXTURE8)
+	root.Shader.get():sampler("skyIrradianceSampler", 8)
 	self.irradiance_tex_:bind()
 	
-	gl.ActiveTexture(gl.TEXTURE7)
-	root.Shader.get():sampler("inscatterSampler", 7)
+	gl.ActiveTexture(gl.TEXTURE9)
+	root.Shader.get():sampler("inscatterSampler", 9)
 	self.inscatter_tex_:bind()
 	
-	gl.ActiveTexture(gl.TEXTURE8)
-	root.Shader.get():sampler("glareSampler", 8)
+	gl.ActiveTexture(gl.TEXTURE10)
+	root.Shader.get():sampler("glareSampler", 10)
 	self.glare_tex_:bind()
 end
 
@@ -367,8 +364,7 @@ function planet_atmosphere:generate()
 		gl.BlendEquationSeparate(gl.FUNC_ADD, gl.FUNC_ADD)
 		
 		copy_irradiance_pass(self.irradiance_tex_, 1.0, delta_e_tex)
-		final_inscatter_pass(delta_sr_tex)
-		
+		final_inscatter_pass(delta_sr_tex)	
 		gl.Disable(gl.BLEND)
 	end
 	

@@ -14,7 +14,7 @@ function sun:__init(elevation, orientation, resolution, num_splits)
 	self.resolution_ = resolution
 	self.num_splits_ = num_splits
 	
-	self.shadow_depth_tex_array_ = root.Texture.from_empty(resolution, resolution, num_splits, { target = gl.TEXTURE_2D_ARRAY, iformat = gl.DEPTH_COMPONENT24, format = gl.DEPTH_COMPONENT, compare_mode = gl.LEQUAL })
+	self.shadow_depth_tex_array_ = root.Texture.from_empty(resolution, resolution, num_splits, { target = gl.TEXTURE_2D_ARRAY, iformat = gl.DEPTH_COMPONENT24, format = gl.DEPTH_COMPONENT })
 	self.shadow_depth_fbo_ = root.FrameBuffer()
 	self.shadow_splits_clip_space_ = {}
 	self.shadow_matrices_ = {}
@@ -70,7 +70,7 @@ function sun:make_sun_shadow(camera, draw_shadow_func)
 		self.shadow_splits_clip_space_[i] = (clip / clip.w).z
 		
 		local sun_view = math.lookat((camera.position - math.normalize(self:get_direction())), camera.position, vec3(0, 1, 0))
-		local sun_proj = math.ortho(-size, size, -size, size, 1000, -size)
+		local sun_proj = math.ortho(-size, size, -size, size, 100, -size)
 		local origin = sun_proj * sun_view * vec4(0, 0, 0, 1)
 		origin = origin * (self.resolution_ / 2.0)
 		

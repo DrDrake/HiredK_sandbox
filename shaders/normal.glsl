@@ -65,5 +65,6 @@ void main() {
 	
 	mat3 worldToTangentFrame = mat3(_WorldToTangentFrame);
 	vec2 nf = (worldToTangentFrame * normalize(cross(p1 - p0, p3 - p2))).xy;
-	frag = vec4(nf, 0.0, 1.0);
+    
+	frag = vec4(nf * 0.5 + 0.5, 0.0, 1.0);
 }

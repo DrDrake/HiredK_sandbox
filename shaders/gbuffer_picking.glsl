@@ -23,7 +23,6 @@ out vec3 fs_Position;
 out vec3 fs_Normal;
 out vec2 fs_TexCoord;
 out vec3 fs_Color;
-out float fs_Flogz;
 
 void main()
 {	
@@ -32,40 +31,16 @@ void main()
 	fs_Normal = u_NormalMatrix * vs_Normal;
 	fs_TexCoord = vs_TexCoord;
     fs_Color = vs_Color;
-    
-    if (u_EnableLogZ) {
-        gl_Position.z = log2(max(1e-6, 1.0 + gl_Position.w)) * Fcoef(u_CameraClip.y);
-        fs_Flogz = 1.0 + gl_Position.w;
-    }
 }
 
 -- fs
-layout(location = 0) out vec4 diffuse;
-layout(location = 1) out vec4 geometric;
+layout(location = 0) out vec4 frag;
 in vec3 fs_Position;
 in vec3 fs_Normal;
 in vec2 fs_TexCoord;
 in vec3 fs_Color;
-in float fs_Flogz;
 
 void main()
 {
-    vec4 color = vec4(0, 0, 0, u_Alpha);
-    
-    if (u_EnableColor) {
-        color = u_Color;
-    }
-    else {
-        color = texture(s_Tex0, fs_TexCoord * u_TexCoordScale);
-    }
-    
-    if (u_EnableLogZ) {
-        gl_FragDepth = log2(fs_Flogz) * 0.5 * Fcoef(u_CameraClip.y);
-    }
-    else {
-        gl_FragDepth = gl_FragCoord.z;
-    }
-    
-	diffuse = vec4(color.rgb * 0.02, color.a * u_Alpha);
-    geometric = vec4(fs_Normal * 0.5 + 0.5, 0.05);
+	frag = u_Color;
 }

@@ -5,13 +5,15 @@
 uniform sampler2DArray s_SunDepthTex;
 uniform sampler2D s_Coverage;
 
+uniform vec3 u_SectorCameraPos;
+uniform samplerCube s_Cubemap;
+
 uniform float u_DepthSplit;
 uniform bool u_EnableLogZ;
-uniform float u_OceanLevel;
-
 uniform vec2 u_CameraClip;
 uniform vec3 u_CameraPosition;
 uniform vec3 u_SunDirection;
+uniform float u_OceanLevel;
 
 uniform mat4 u_SunShadowMatrix[MAX_NUM_SHADOW_SPLITS];
 uniform float u_SunShadowResolution;
@@ -84,7 +86,7 @@ float GetCloudsShadowFactor(vec3 pos)
 float GetShadowFactor(vec3 pos, float depth)
 {
 	float factor = GetCloudsShadowFactor(pos + vec3(0, u_EarthRadius, 0)); // temp
-	
+    
 	int index = 0;
 	if (depth < u_SunShadowSplits.x) {
 		index = 0;

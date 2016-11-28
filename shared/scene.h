@@ -20,8 +20,8 @@ function scene:is_planet_loaded()
     return self.planet_ ~= nil
 end
 
-function scene:load_planet(radius, max_level, enable_logz)
-    self.planet_ = planet(self, radius, max_level, enable_logz)
+function scene:load_planet(path)
+    self.planet_ = planet(self, path)
     return self.planet_
 end
 
@@ -36,11 +36,10 @@ function scene:bind_global(camera)
 		self.depth_split_clip_space_ = (clip / clip.w).z
         
         root.Shader.get():uniform("u_DepthSplit", self.depth_split_clip_space_)
-        root.Shader.get():uniform("u_EnableLogZ", self.planet_.enable_logz_ and 1 or 0)
-        root.Shader.get():uniform("u_OceanLevel", 1.0)
-        
+        root.Shader.get():uniform("u_EnableLogZ", camera.enable_logz_ and 1 or 0)
         root.Shader.get():uniform("u_CameraClip", camera.clip)
         root.Shader.get():uniform("u_CameraPos", camera.position)
+        root.Shader.get():uniform("u_OceanLevel", 1.0)
         
         root.Shader.get():uniform("u_SunDir", self.sun_:get_direction())
         self.planet_.atmosphere_:bind(1000.0)
@@ -50,6 +49,12 @@ function scene:bind_global(camera)
         root.Shader.get():uniform("u_SunShadowResolution", 4096.0)
         root.Shader.get():uniform("u_SunDirection", self.sun_:get_direction())
         
+        gl.ActiveTexture(gl.TEXTURE4)
+        root.Shader.get():sampler("s_Cubemap", 4)      
+        local sector = self.planet_.loaded_sectors_[1]
+        sector.global_cubemap_.cubemap_tex_:bind()
+        gl.Enable(gl.TEXTURE_CUBE_MAP_SEAMLESS)
+        
         gl.ActiveTexture(gl.TEXTURE5)
         root.Shader.get():sampler("s_SunDepthTex", 5)
         self.sun_.shadow_depth_tex_array_:bind()
@@ -57,7 +62,6 @@ function scene:bind_global(camera)
         if self.planet_.clouds_.is_loaded_ then
         
             local earth_radius = self.planet_.clouds_:calculate_planet_radius(self.planet_.clouds_.atmosphere_start_height_, self.planet_.clouds_.horizon_distance_)
-            --print(6360000.0, earth_radius, 6360000.0 - earth_radius)
             root.Shader.get():uniform("u_EarthRadius", earth_radius)	
             root.Shader.get():uniform("u_StartHeight", self.planet_.clouds_.atmosphere_start_height_)	
             root.Shader.get():uniform("u_CoverageScale", 1.0 / self.planet_.clouds_:calculate_max_distance(earth_radius))
@@ -73,20 +77,20 @@ end
 function scene:make_shadow(camera)
 
 	gl.Enable(gl.DEPTH_TEST)
+    gl.Enable(gl.CULL_FACE)
+    gl.CullFace(gl.FRONT)
 
     if self:is_planet_loaded() then
-        self.sun_:make_sun_shadow(camera, function(matrix)   
-            for i = 1, table.getn(self.planet_.active_sectors_) do
-            
-                self.planet_.active_sectors_[i].gbuffer_shader_:bind()
-                root.Shader.get():uniform("u_ViewProjMatrix", matrix)
-                self.planet_.active_sectors_[i].model_:draw()
-                root.Shader.pop_stack()
+        self.sun_:make_sun_shadow(camera, function(matrix)       
+            for i = 1, table.getn(self.planet_.active_sectors_) do          
+                self.planet_.active_sectors_[i]:draw_shadow(matrix)
             end
         end)
     end
 	
 	gl.Disable(gl.DEPTH_TEST)
+    gl.Disable(gl.CULL_FACE)
+    gl.CullFace(gl.BACK)
 end
 
 function scene:draw(planet_camera, sector_camera)

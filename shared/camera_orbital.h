@@ -1,5 +1,5 @@
 --[[
-- @file scene.h
+- @file camera_ortho.h
 - @brief
 ]]
 

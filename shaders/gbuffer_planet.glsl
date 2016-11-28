@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+const vec3 OceanColor = vec3(0.039f, 0.156f, 0.47f);
+
 uniform mat4 u_Deform_ScreenQuadCorners;
 uniform mat4 u_Deform_ScreenQuadVerticals;
 uniform vec4 u_Deform_ScreenQuadCornerNorms;
@@ -92,21 +94,27 @@ void main()
 	mat3 TTW = mat3(u_Deform_TangentFrameToWorld);
     fn = normalize(TTW * fn);
 	
-	vec3 color = vec3(0, 1, 0);
+	vec3 color = vec3(0, 1, 0) * 0.02;
 	float roughness = 0.0f;
 
     if (u_EnableLogZ)
     {
         if (ht <= u_OceanLevel) {
-            color = vec3(0, 0, 1);
-            roughness = 0.008f;
+            color = OceanColor * 0.02;
+            roughness = 0.1f;
         }
         
         color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, 0.0, 1.0);
         gl_FragDepth = log2(fs_Flogz) * 0.5 * Fcoef(u_CameraClip.y);
     }
     else {    
-        if (gl_FragCoord.z >= u_DepthSplit) {
+        if (gl_FragCoord.z >= u_DepthSplit)
+        {
+            vec3 I = p - u_CameraPos;
+            vec3 R = reflect(I, fn);      
+            vec3 reflect = texture(s_Cubemap, R).rgb;       
+            color = mix(color, reflect, roughness);
+        
             float shadow = GetShadowFactor(p - vec3(0.0, 6360000.0, 0.0), gl_FragCoord.z);
             color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, 0.0, shadow);
         }

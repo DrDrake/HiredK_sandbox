@@ -55,7 +55,12 @@ void main()
             shadow = GetShadowFactor(p, depth);
         }
         
-        color = surfaceLighting(p + vec3(0, 6360000.0, 0), color, u_CameraPos, u_SunDir, n, geometric.a, shadow);
+        vec3 I = p - u_SectorCameraPos;
+        vec3 R = reflect(I, n);      
+        vec3 reflect = texture(s_Cubemap, R).rgb;
+        
+        color = mix(color, reflect, geometric.a);      
+        color = surfaceLighting(p + vec3(0, 6360000.0, 0), color, u_CameraPos, u_SunDir, n, 0.0, shadow);
         color *= ao;
     }
     

@@ -189,42 +189,6 @@ vec3 inScattering(vec3 camera, vec3 point, vec3 sundir, out vec3 extinction, flo
     return result * SUN_INTENSITY;
 }
 
-float meanFresnel(float cosThetaV, float sigmaV) {
-    return pow(1.0 - cosThetaV, 5.0 * exp(-2.69 * sigmaV)) / (1.0 + 22.7 * pow(sigmaV, 1.5));
-}
-
-float meanFresnel(vec3 V, vec3 N, float sigmaSq) {
-    return meanFresnel(dot(V, N), sqrt(sigmaSq));
-}
-
-float reflectedSunRadiance(vec3 V, vec3 N, vec3 L, float sigmaSq)
-{
-    vec3 H = normalize(L + V);
-
-    float hn = dot(H, N);
-    float p = exp(-2.0 * ((1.0 - hn * hn) / sigmaSq) / (1.0 + hn)) / (4.0 * M_PI * sigmaSq);
-
-    float c = 1.0 - dot(V, H);
-    float c2 = c * c;
-    float fresnel = 0.02 + 0.98 * c2 * c2 * c;
-
-    float zL = dot(L, N);
-    float zV = dot(V, N);
-    zL = max(zL, 0.01);
-    zV = max(zV, 0.01);
-
-    return zL <= 0.0 ? 0.0 : max(fresnel * p * sqrt(abs(zL / zV)), 0.0);
-}
-
-vec3 surfaceRadiance(vec3 V, vec3 N, vec3 L, vec3 color, float roughness, vec3 sunL, vec3 skyE)
-{
-    float F = meanFresnel(V, N, roughness);
-    vec3 Lsun = reflectedSunRadiance(V, N, L, roughness) * sunL * 0.06;
-    vec3 Lsky = skyE * F / M_PI;
-    vec3 Lsea = (1.0 - F) * color * skyE / M_PI;
-    return Lsun + Lsky + Lsea;
-}
-
 vec3 surfaceLighting(vec3 pos, vec3 color, vec3 camera, vec3 sun, vec3 N, float roughness, float shadow)
 {
 	vec3 V = normalize(pos);
@@ -235,9 +199,8 @@ vec3 surfaceLighting(vec3 pos, vec3 color, vec3 camera, vec3 sun, vec3 N, float 
 	vec3 skyE;
 	sunRadianceAndSkyIrradiance(P, N, sun, sunL, skyE);	
 	float cTheta = dot(N, sun) * shadow;
-	
-	vec3 result = color * 0.05; // surfaceRadiance(-v, N, sun, color, 0.01, sunL, skyE) * 0.05;	
-	result = result * (sunL * max(cTheta, 0.2) + skyE) / M_PI;
+
+	vec3 result = color * (sunL * max(cTheta, 0.2) + skyE) / M_PI;
 	
 	vec3 extinction;
 	vec3 inscatter = inScattering(camera, P, sun, extinction, 0.0) * 0.08;

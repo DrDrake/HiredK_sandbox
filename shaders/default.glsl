@@ -3,6 +3,8 @@
 uniform mat4 u_ViewProjMatrix;
 uniform sampler2D s_Tex0;
 
+uniform mat4 u_ModelMatrix;
+
 uniform float u_RenderingType;
 uniform vec4 u_Color;
 
@@ -15,7 +17,7 @@ out vec4 fs_Color;
 
 void main()
 {
-	gl_Position = u_ViewProjMatrix * vec4(vs_Position, 1);
+	gl_Position = u_ViewProjMatrix * u_ModelMatrix * vec4(vs_Position, 1);
 	fs_TexCoord = vs_TexCoord;
 	fs_Color = vs_Color;
 }

@@ -9,6 +9,9 @@ function planet_clouds:__init(planet)
     root.ScriptObject.__init(self, "planet_clouds")
     self.type = root.ScriptObject.Dynamic
 	self.planet_ = planet
+    
+    self.shader_ = FileSystem:search("shaders/volumetric_clouds.glsl", true)
+    self.screen_quad_ = root.Mesh.build_quad()
     self.is_loaded_ = false
 end
 
@@ -16,7 +19,6 @@ function planet_clouds:load()
 
     if self.is_loaded_ == false then
     
-        self.max_iterations_ = 80	
         self.random_vectors_ = {}
         
         for i = 1, 6 do
@@ -111,10 +113,11 @@ function planet_clouds:calculate_planet_radius(atmosphere_height, horizon_distan
 	return radius - atmosphere_height
 end
 
-function planet_clouds:set_uniforms()
+function planet_clouds:set_uniforms(max_iterations)
+
+    root.Shader.get():uniform("_MaxIterations", max_iterations)
 
 	root.Shader.get():uniform("_CloudBottomFade", self.cloud_bottom_fade_)
-	root.Shader.get():uniform("_MaxIterations", self.max_iterations_)
 	root.Shader.get():uniform("_SampleScalar", self.sample_scalar_)
 	root.Shader.get():uniform("_SampleThreshold", self.sample_threshold_)
 	root.Shader.get():uniform("_LODDistance", self.LOD_distance_)
@@ -151,7 +154,7 @@ function planet_clouds:set_uniforms()
 	local atmosphere_thickness = self.atmosphere_end_height_ - self.atmosphere_start_height_
 	root.Shader.get():uniform("_SunRayLength", self.sunray_length_ * atmosphere_thickness)
 	root.Shader.get():uniform("_ConeRadius", self.cone_radius_ * atmosphere_thickness)
-	root.Shader.get():uniform("_RayStepLength", atmosphere_thickness / math.floor(self.max_iterations_ * 0.5))
+	root.Shader.get():uniform("_RayStepLength", atmosphere_thickness / math.floor(max_iterations * 0.5))
 	
 	local earth_radius = self:calculate_planet_radius(self.atmosphere_start_height_, self.horizon_distance_)
     
@@ -172,9 +175,6 @@ function planet_clouds:set_uniforms()
 	root.Shader.get():uniform("_AtmosphereThickness", self.atmosphere_end_height_ - self.atmosphere_start_height_)
 	root.Shader.get():uniform("_MaxDistance", self:calculate_max_distance(earth_radius))
 	
-	root.Shader.get():uniform("_LightDirection", self.planet_.scene_.sun_:get_direction())
-	root.Shader.get():uniform("_LightColor", vec3(1.0))
-	
 	gl.ActiveTexture(gl.TEXTURE0)
 	root.Shader.get():sampler("_Coverage", 0)
 	self.coverage_tex_:bind()
@@ -192,10 +192,35 @@ function planet_clouds:set_uniforms()
 	self.detail_tex_:bind()
 end
 
-function planet_clouds:__update(dt)
+function planet_clouds:draw(camera, max_iterations)
 
     if self.is_loaded_ then
-        self.coverage_offset_ = self.coverage_offset_ + (self.coverage_offset_per_frame_ * dt)
-        self.base_offset_ = self.base_offset_ + (self.base_offset_per_frame_ * dt)
+    
+        self.shader_:bind()	
+        root.Shader.get():uniform("u_InvProjMatrix", math.inverse(math.perspective(camera.fov, camera.aspect, 1.0, 100.0)))
+        root.Shader.get():uniform("u_InvRotation", mat3(math.inverse(camera.view_matrix)))
+        
+        local earth_radius = self:calculate_planet_radius(self.atmosphere_start_height_, self.horizon_distance_)
+        root.Shader.get():uniform("_CameraPosition", camera.position + vec3(0, earth_radius, 0))        
+        root.Shader.get():uniform("_LightDirection", self.planet_.scene_.sun_:get_direction())
+        root.Shader.get():uniform("_LightColor", vec3(1.0))
+        self:set_uniforms(max_iterations)
+        
+        self.screen_quad_:draw()
+        root.Shader.pop_stack()
+    end
+end
+
+function planet_clouds:__update(dt)
+
+    if sf.Keyboard.is_key_pressed(sf.Keyboard.T) then
+       self.animation_scale_ = 20.0
+    else
+       self.animation_scale_ = 1.0
+    end
+
+    if self.is_loaded_ then
+        self.coverage_offset_ = self.coverage_offset_ + (self.coverage_offset_per_frame_ * self.animation_scale_ * dt)
+        self.base_offset_ = self.base_offset_ + (self.base_offset_per_frame_ * self.animation_scale_ * dt)
     end
 end

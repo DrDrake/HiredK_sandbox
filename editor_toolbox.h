@@ -33,14 +33,22 @@ function editor_toolbox:refresh_gui(w, h)
         
         for i = 1, table.getn(self.editor_.scene_.planet_.loaded_sectors_) do
         
+            local sector = self.editor_.scene_.planet_.loaded_sectors_[i]
             local sector_node = planet_node:add_node(gwen.TreeNode(self), "Sector")
             
             root.connect(sector_node.on_double_click, function(control)
-                local sector = self.editor_.scene_.planet_.loaded_sectors_[i]
                 self.editor_.tab_control_:add_sector_tab(sector)
             end)
+            
+            if sector.paged_in_ then  
+                for i = 1, table.getn(sector.objects_) do          
+                    local object_node = sector_node:add_node(gwen.TreeNode(self), "Object")
+                end
+                
+                sector_node:open()
+            end
         end
         
-        planet_node:expand_all()
+        planet_node:open()
     end
 end

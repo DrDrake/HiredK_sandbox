@@ -25,6 +25,9 @@ function sun:__init(elevation, orientation, resolution, num_splits)
 		0.0, 0.0, 0.5, 0.0,
 		0.5, 0.5, 0.5, 1.0
 	})
+    
+	self.show_depth_shader_ = FileSystem:search("shaders/show_depth.glsl", true)
+	self.screen_quad_ = root.Mesh.build_quad()
 end
 
 function sun:get_direction()
@@ -86,5 +89,25 @@ function sun:make_sun_shadow(camera, draw_shadow_func)
 	
 	gl.Disable(gl.POLYGON_OFFSET_FILL)
 	root.FrameBuffer.unbind()
+	gl.PopAttrib()
+end
+
+function sun:show_depth_tex()
+
+	gl.PushAttrib(gl.VIEWPORT_BIT)
+	self.show_depth_shader_:bind()
+	local size = 128
+	
+	gl.ActiveTexture(gl.TEXTURE0)
+	root.Shader.get():sampler("s_Tex0", 0)
+	self.shadow_depth_tex_array_:bind()
+	
+	for i = 1, self.num_splits_ do
+		gl.Viewport((size + 2) * (i - 1), 0, size, size)
+		root.Shader.get():uniform("u_Layer", i - 1)
+		self.screen_quad_:draw()
+	end
+	
+	root.Shader.pop_stack()
 	gl.PopAttrib()
 end

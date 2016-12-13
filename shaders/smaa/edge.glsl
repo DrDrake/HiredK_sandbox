@@ -10,7 +10,7 @@ uniform sampler2D s_Tex0;
 
 -- vs
 #define SMAA_ONLY_COMPILE_VS 1
-#include "SMAA.h"
+#include "common.h"
 
 layout(location = 0) in vec3 vs_Position;
 layout(location = 1) in vec2 vs_TexCoord;
@@ -29,7 +29,7 @@ void main()
 
 -- fs
 #define SMAA_ONLY_COMPILE_FS 1
-#include "SMAA.h"
+#include "common.h"
 
 layout(location = 0) out vec4 frag;
 in vec2 texcoord;

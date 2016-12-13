@@ -3,17 +3,11 @@
 const int MAX_MOTION_SAMPLES = 64;
 
 uniform mat4 u_InvViewProjMatrix;
-uniform mat4 u_PreViewProjMatrix;
+uniform mat4 u_PrevViewProjMatrix;
 uniform float u_MotionScale;
 
-uniform sampler2D s_Tex0;
-uniform sampler2D s_Tex1;
-
-uniform bool u_EnableLensflare;
-uniform mat4 u_LensStarMatrix;
-uniform sampler2D s_Tex2;
-uniform sampler2D s_Tex3;
-uniform sampler2D s_Tex4;
+uniform sampler2D s_Tex0; // depth
+uniform sampler2D s_Tex1; // final tex
 
 -- vs
 layout(location = 0) in vec2 vs_Position;
@@ -35,7 +29,7 @@ vec4 motion_blur()
 	float depth = texture(s_Tex0, fs_TexCoord).r;
 	vec4 cpos = vec4(fs_TexCoord * 2.0 - 1.0, depth, 1.0);
 	cpos = u_InvViewProjMatrix * cpos;
-	vec4 ppos = u_PreViewProjMatrix * cpos;
+	vec4 ppos = u_PrevViewProjMatrix * cpos;
 	ppos.xyz /= ppos.w;
 	ppos.xy = ppos.xy * 0.5 + 0.5;
 	
@@ -57,13 +51,4 @@ vec4 motion_blur()
 void main()
 {
 	frag = motion_blur();
-    
-    if (u_EnableLensflare)
-    {
-        vec4 lensMod = texture(s_Tex3, fs_TexCoord);
-        vec2 lensStarTexcoord = (u_LensStarMatrix * vec4(fs_TexCoord, 0.0, 1.0)).xy;
-        lensMod += texture(s_Tex4, lensStarTexcoord);
-        
-        frag += (texture(s_Tex2, fs_TexCoord) * lensMod * 0.25);
-    }
 }

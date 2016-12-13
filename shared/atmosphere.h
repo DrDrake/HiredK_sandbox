@@ -1,5 +1,5 @@
 --[[
-- @file planet_atmosphere.h
+- @file atmosphere.h
 - @brief
 ]]
 
@@ -20,11 +20,10 @@ RES_NU = 8
 
 AVERAGE_GROUND_REFLECTANCE = 0.1
 
-class 'planet_atmosphere' (root.ScriptObject)
+class 'atmosphere' (root.ScriptObject)
 
-function planet_atmosphere:__init(planet)
-    root.ScriptObject.__init(self, "planet_atmosphere")
-	self.planet_ = planet
+function atmosphere:__init()
+    root.ScriptObject.__init(self, "atmosphere")
 	
 	self.HR_ = 8.0
 	self.betaR_ = vec3(5.8e-3, 1.35e-2, 3.31e-2)	
@@ -34,17 +33,10 @@ function planet_atmosphere:__init(planet)
 	self.betaMEx_ = vec3(4.44e-3, 4.44e-3, 4.44e-3)
 	self.mieG_ = 0.8
 	
-	self.transmittance_tex_ = root.Texture.from_empty(TRANSMITTANCE_W, TRANSMITTANCE_H,
-		{ iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
-		
-	self.irradiance_tex_ = root.Texture.from_empty(SKY_W, SKY_H,
-		{ iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
-	
-	self.inscatter_tex_ = root.Texture.from_empty(RES_MU_S * RES_NU, RES_MU, RES_R,
-		{ target = gl.TEXTURE_3D, iformat = gl.RGBA16F, format = gl.RGBA, type = gl.FLOAT, filter_mode = gl.LINEAR })
-		
-	self.glare_tex_ = root.Texture.from_image(FileSystem:search("sunglare.png", true),
-		{ filter_mode = gl.LINEAR })
+	self.transmittance_tex_ = root.Texture.from_empty(TRANSMITTANCE_W, TRANSMITTANCE_H, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })		
+	self.irradiance_tex_ = root.Texture.from_empty(SKY_W, SKY_H, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })	
+	self.inscatter_tex_ = root.Texture.from_empty(RES_MU_S * RES_NU, RES_MU, RES_R, { target = gl.TEXTURE_3D, iformat = gl.RGBA16F, format = gl.RGBA, type = gl.FLOAT, filter_mode = gl.LINEAR })		
+	self.glare_tex_ = root.Texture.from_image(FileSystem:search("images/sunglare.png", true), { filter_mode = gl.LINEAR })
 
 	self.copy_inscatter1_shader_ = FileSystem:search("shaders/atmosphere/copy_inscatter1.glsl", true)
 	self.copy_inscatterN_shader_ = FileSystem:search("shaders/atmosphere/copy_inscatterN.glsl", true)
@@ -58,7 +50,7 @@ function planet_atmosphere:__init(planet)
 	self.screen_quad_ = root.Mesh.build_quad()
 end
 
-function planet_atmosphere:set_uniforms(scale)
+function atmosphere:set_uniforms(scale)
 
 	root.Shader.get():uniform("Rg", Rg * scale)
 	root.Shader.get():uniform("Rt", Rt * scale)
@@ -85,7 +77,7 @@ function planet_atmosphere:set_uniforms(scale)
 	root.Shader.get():uniform("mieG", self.mieG_)
 end
 
-function planet_atmosphere:set_uniforms_layer(scale, layer)
+function atmosphere:set_uniforms_layer(scale, layer)
 
 	local r = layer / (RES_R - 1.0)
 	r = math.sqrt(Rg * Rg + r * r * (Rt * Rt - Rg * Rg)) + ((layer == 0) and 0.01 or ((layer == RES_R - 1) and -0.001 or 0.0))
@@ -101,7 +93,7 @@ function planet_atmosphere:set_uniforms_layer(scale, layer)
 	self:set_uniforms(scale)
 end
 
-function planet_atmosphere:bind(scale)
+function atmosphere:bind(scale)
 
     self:set_uniforms(scale)
 
@@ -122,7 +114,7 @@ function planet_atmosphere:bind(scale)
 	self.glare_tex_:bind()
 end
 
-function planet_atmosphere:generate()
+function atmosphere:generate()
 
 	local fbo = root.FrameBuffer()
 

@@ -2,9 +2,6 @@
 
 const float SUN_INTENSITY = 100.0;
 
-uniform vec3 u_CameraPos;
-uniform vec3 u_SunDir;
-
 uniform sampler2D skyIrradianceSampler;
 uniform sampler3D inscatterSampler;
 uniform sampler2D glareSampler;
@@ -187,22 +184,4 @@ vec3 inScattering(vec3 camera, vec3 point, vec3 sundir, out vec3 extinction, flo
     }
 
     return result * SUN_INTENSITY;
-}
-
-vec3 surfaceLighting(vec3 pos, vec3 color, vec3 camera, vec3 sun, vec3 N, float roughness, float shadow)
-{
-	vec3 V = normalize(pos);
-	vec3 P = V * max(length(pos), 6360000.0 + 1.0);
-	vec3 v = normalize(P - camera);
-	
-	vec3 sunL;
-	vec3 skyE;
-	sunRadianceAndSkyIrradiance(P, N, sun, sunL, skyE);	
-	float cTheta = dot(N, sun) * shadow;
-
-	vec3 result = color * (sunL * max(cTheta, 0.2) + skyE) / M_PI;
-	
-	vec3 extinction;
-	vec3 inscatter = inScattering(camera, P, sun, extinction, 0.0) * 0.08;
-	return result * extinction + inscatter;
 }

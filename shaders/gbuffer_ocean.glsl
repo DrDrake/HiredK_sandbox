@@ -1,9 +1,5 @@
 #version 400 core
 
-#include "common.h"
-
-const vec3 OceanColor = vec3(0.039f, 0.156f, 0.47f);
-
 const float CHOPPY_FACTOR = 2.5;
 
 uniform mat4 _Ocean_CameraToScreen;
@@ -18,8 +14,8 @@ uniform vec2 _Ocean_ScreenGridSize;
 uniform float _Ocean_Radius;
 
 uniform sampler2DArray fftWavesSampler;
-uniform vec4 GRID_SIZES;
 uniform sampler3D slopeVarianceSampler;
+uniform vec4 GRID_SIZES;
 
 -- vs
 layout(location = 0) in vec4 vs_Position;
@@ -88,6 +84,8 @@ in vec3 fs_Position;
 in vec2 fs_TexCoord;
 in float fs_Flogz;
 
+const vec3 OceanColor = vec3(0.039f, 0.156f, 0.47f);
+
 void main()
 {
     vec2 slopes = texture(fftWavesSampler, vec3(fs_TexCoord / GRID_SIZES.x, 1.0)).xy;
@@ -101,7 +99,7 @@ void main()
     if (dot(V, N) < 0.0) {
         N = reflect(N, V);
     }
-
+	
 	float Jxx = dFdx(fs_TexCoord.x);
     float Jxy = dFdy(fs_TexCoord.x);
     float Jyx = dFdx(fs_TexCoord.y);
@@ -116,21 +114,7 @@ void main()
     
     float roughness = max(texture(slopeVarianceSampler, vec3(ua, ub, uc)).x, 2e-5);
 	vec3 fn = normalize(mat3(_Ocean_OceanToWorld) * N);
-	vec3 color = OceanColor * 0.02;
-	
-	if (gl_FragCoord.z >= u_DepthSplit)
-    {
-        vec3 p = (_Ocean_OceanToWorld * vec4(fs_Position, 1.0)).xyz;
-        
-        vec3 I = p - u_CameraPos;
-        vec3 R = reflect(I, fn);      
-        vec3 reflect = texture(s_Cubemap, R).rgb;       
-        color = mix(color, reflect, roughness * 1000.0);    
-        
-		float shadow = GetShadowFactor(p - vec3(0.0, 6360000.0 + 10.0, 0.0), gl_FragCoord.z);
-		color = surfaceLighting(p, color, u_CameraPos, u_SunDir, fn, 0.0, shadow);
-	}
 
-	diffuse = vec4(color, 1);
-	geometric = vec4(fn * 0.5 + 0.5, roughness * 1000.0);
+	diffuse = vec4(OceanColor, roughness);
+	geometric = vec4(fn * 0.5 + 0.5, 0.1);
 }

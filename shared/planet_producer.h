@@ -13,12 +13,14 @@ function planet_producer:__init(planet, terrain, seed)
 	self.perlin_noise_:generate(seed)
 	
 	self.noise_amp_ = { -3250.0, -1590.0, -1125.0, -795.0, -561.0, -397.0, -140.0, -100.0, 15.0, 8.0, 5.0, 2.5, 1.5, 1.0 }    
-	self.noise_amp_factor_ = self.planet_.radius_ * 0.0000004
+	self.noise_amp_factor_ = self.planet_.radius_ * 0.00000065
 	self.noise_frequency_ = 40.0
+	self.color_upsample_factor_ = 2.5
 	self.fbo_ = root.FrameBuffer()
 	
-	self.height_shader_ = FileSystem:search("shaders/height.glsl", true)
-	self.normal_shader_ = FileSystem:search("shaders/normal.glsl", true)
+	self.height_shader_ = FileSystem:search("shaders/producer/height.glsl", true)
+	self.normal_shader_ = FileSystem:search("shaders/producer/normal.glsl", true)
+    self.color_shader_ = FileSystem:search("shaders/producer/color.glsl", true)
 	self.screen_quad_ = root.Mesh.build_quad()
 end
 
@@ -41,10 +43,11 @@ function planet_producer:__produce(tile)
 		self.fbo_:clear()
 		self.fbo_:attach(height_tex, gl.COLOR_ATTACHMENT0)
 		self.fbo_:bind_output()
+        
+        self.height_shader_:bind()
 		
 		local l = self.owner.root.coord.length
 		local size = self.tile_size - (1 + self.border * 2)
-		self.height_shader_:bind()
 		
 		gl.ActiveTexture(gl.TEXTURE0)
 		root.Shader.get():sampler("_PermTable2D", 0)
@@ -166,8 +169,36 @@ function planet_producer:__produce(tile)
 		tile:add_texture(normal_tex)	
 		root.Shader.pop_stack()		
 	end
+    
+    local process_color_pass = function()
+
+		local upsample_size = self.tile_size * self.color_upsample_factor_
+		local color_tex = root.Texture.from_empty(upsample_size, upsample_size, { filter_mode = gl.LINEAR })
+        
+		self.fbo_:clear()
+		self.fbo_:attach(color_tex, gl.COLOR_ATTACHMENT0)
+		self.fbo_:bind_output()
+		
+		gl.PushAttrib(gl.VIEWPORT_BIT)
+		gl.Viewport(0, 0, upsample_size, upsample_size)      
+        self.color_shader_:bind()
+        
+		gl.ActiveTexture(gl.TEXTURE0)
+		root.Shader.get():sampler("_ElevationSampler", 0)
+		tile:get_texture(0):bind()
+        
+		gl.ActiveTexture(gl.TEXTURE1)
+		root.Shader.get():sampler("_NormalSampler", 1)
+		tile:get_texture(1):bind()
+        
+		self.screen_quad_:draw()	
+		tile:add_texture(color_tex)	
+		root.Shader.pop_stack()	
+		gl.PopAttrib()
+    end
 	
 	process_height_pass()
 	process_normal_pass()
+    process_color_pass()
 	return true
 end

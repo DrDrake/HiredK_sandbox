@@ -1,122 +1,110 @@
 --[[
-- @file planet_clouds.h
+- @file volumetric_clouds.h
 - @brief
 ]]
 
-class 'planet_clouds' (root.ScriptObject)
+class 'volumetric_clouds' (root.ScriptObject)
 
-function planet_clouds:__init(planet)
-    root.ScriptObject.__init(self, "planet_clouds")
+function volumetric_clouds:__init()
+    root.ScriptObject.__init(self, "volumetric_clouds")
     self.type = root.ScriptObject.Dynamic
-	self.planet_ = planet
     
     self.shader_ = FileSystem:search("shaders/volumetric_clouds.glsl", true)
-    self.screen_quad_ = root.Mesh.build_quad()
-    self.is_loaded_ = false
-end
-
-function planet_clouds:load()
-
-    if self.is_loaded_ == false then
-    
-        self.random_vectors_ = {}
+    self.screen_quad_ = root.Mesh.build_quad()   
         
-        for i = 1, 6 do
-            self.random_vectors_[i] = math.ball_rand(1.0)
-        end
-            
-        self.coverage_tex_ = root.Texture.from_image(FileSystem:search("coverage.png", true),
-            { filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
-            
-        self.curl_tex_ = root.Texture.from_image(FileSystem:search("curl.png", true),
-            { filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
-            
-        self.perlin3d_tex_ = root.Texture.from_raw(128, 128, 128, FileSystem:search("perlin3d.raw", true),
-            { target = gl.TEXTURE_3D, filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
-            
-        self.detail_tex_ = root.Texture.from_raw(32, 32, 32, FileSystem:search("detail.raw", true),
-            { target = gl.TEXTURE_3D, iformat = gl.RGB8, format = gl.RGB, filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
+    self.coverage_tex_ = root.Texture.from_image(FileSystem:search("images/coverage.png", true),
+        { filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
         
-        -- coverage
-        self.coverage_offset_ = vec2()
-        self.horizon_coverage_start_ = 0.3
-        self.horizon_coverage_end_ = 0.45
+    self.curl_tex_ = root.Texture.from_image(FileSystem:search("images/curl.png", true),
+        { filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
         
-        -- lighting
-        self.cloud_base_color_ = vec3(0.518, 0.666, 0.816)
-        self.cloud_top_color_ = vec3(1.000, 1.000, 1.000)
-        self.sun_scalar_ = 1.0
-        self.ambient_scalar_ = 1.0
-        self.sunray_length_ = 0.08
-        self.cone_radius_ = 0.08
-        self.density_ = 1.0
-        self.forward_scattering_G_ = 0.8
-        self.backward_scattering_G_ = -0.5
-        self.dark_outline_scalar_ = 1.0
+    self.perlin3d_tex_ = root.Texture.from_raw(128, 128, 128, FileSystem:search("images/perlin3d.raw", true),
+        { target = gl.TEXTURE_3D, filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
         
-        -- animation
-        self.animation_scale_ = 1.0
-        self.coverage_offset_per_frame_ = vec2(0.0004, 0.001)
-        self.base_offset_per_frame_ = vec3(0.0, 0.0, 0.01)
-        self.detail_offset_per_frame_ = vec3()
+    self.detail_tex_ = root.Texture.from_raw(32, 32, 32, FileSystem:search("images/detail.raw", true),
+        { target = gl.TEXTURE_3D, iformat = gl.RGB8, format = gl.RGB, filter_mode = gl.LINEAR, wrap_mode = gl.REPEAT } )
         
-        -- modeling (base)	
-        self.base_scale_ = 1.0
-        self.base_offset_ = vec3()
-        self.cloud_gradient1_ = vec4(0.011, 0.098, 0.126, 0.225)
-        self.cloud_gradient2_ = vec4(0.000, 0.096, 0.311, 0.506)
-        self.cloud_gradient3_ = vec4(0.000, 0.087, 0.749, 1.000)
-        self.sample_scalar_ = 1.0
-        self.sample_threshold_ = 0.05
-        self.cloud_bottom_fade_ = 0.0
-        
-        -- modeling (detail)
-        self.detail_scale_ = 8.0
-        self.detail_offset_ = vec3()
-        self.erosion_edge_size_ = 0.5
-        self.cloud_distortion_ = 0.45
-        self.cloud_distortion_scale_ = 0.5
-        
-        -- optimization
-        self.LOD_distance_ = 0.3
-        self.horizon_level_ = 0.0
-        self.horizon_fade_ = 0.25
-        self.horizon_fade_start_alpha_ = 0.9
-        
-        -- atmosphere
-        self.horizon_distance_ = 35000.0
-        self.atmosphere_start_height_ = 1500.0
-        self.atmosphere_end_height_ = 4000.0
-        self.camera_position_scaler_ = vec3(1.0)
-        
-        self.is_loaded_ = true
+    self.random_vectors_ = {}   
+    for i = 1, 6 do
+        self.random_vectors_[i] = math.ball_rand(1.0)
     end
+    
+    -- coverage
+    self.coverage_offset_ = vec2()
+    self.horizon_coverage_start_ = 0.3
+    self.horizon_coverage_end_ = 0.45
+    
+    -- lighting
+    self.cloud_base_color_ = vec3(0.518, 0.666, 0.816)
+    self.cloud_top_color_ = vec3(1.000, 1.000, 1.000)
+    self.sun_scalar_ = 1.0
+    self.ambient_scalar_ = 1.0
+    self.sunray_length_ = 0.08
+    self.cone_radius_ = 0.08
+    self.density_ = 1.0
+    self.forward_scattering_G_ = 0.8
+    self.backward_scattering_G_ = -0.5
+    self.dark_outline_scalar_ = 1.0
+    
+    -- animation
+    self.animation_scale_ = 20.0
+    self.coverage_offset_per_frame_ = vec2(0.0004, 0.001)
+    self.base_offset_per_frame_ = vec3(0.0, 0.0, 0.01)
+    self.detail_offset_per_frame_ = vec3()
+    
+    -- modeling (base)	
+    self.base_scale_ = 1.0
+    self.base_offset_ = vec3()
+    self.cloud_gradient1_ = vec4(0.011, 0.098, 0.126, 0.225)
+    self.cloud_gradient2_ = vec4(0.000, 0.096, 0.311, 0.506)
+    self.cloud_gradient3_ = vec4(0.000, 0.087, 0.749, 1.000)
+    self.sample_scalar_ = 1.0
+    self.sample_threshold_ = 0.05
+    self.cloud_bottom_fade_ = 0.0
+    
+    -- modeling (detail)
+    self.detail_scale_ = 8.0
+    self.detail_offset_ = vec3()
+    self.erosion_edge_size_ = 0.5
+    self.cloud_distortion_ = 0.45
+    self.cloud_distortion_scale_ = 0.5
+    
+    -- optimization
+    self.LOD_distance_ = 0.3
+    self.horizon_level_ = 0.0
+    self.horizon_fade_ = 0.25
+    self.horizon_fade_start_alpha_ = 0.9
+    
+    -- atmosphere
+    self.horizon_distance_ = 35000.0
+    self.atmosphere_start_height_ = 1500.0
+    self.atmosphere_end_height_ = 4000.0
+    self.camera_position_scaler_ = vec3(1.0)
 end
 
-function planet_clouds:calculate_horizon_distance(inner_radius, outer_radius)
+function volumetric_clouds:calculate_horizon_distance(inner_radius, outer_radius)
 	return math.sqrt((outer_radius * outer_radius) - (inner_radius * inner_radius))
 end
 
-function planet_clouds:calculate_max_distance(radius)
+function volumetric_clouds:calculate_max_distance(radius)
 	return self:calculate_horizon_distance(radius, radius + self.atmosphere_end_height_)
 end
 
-function planet_clouds:calculate_max_ray_distance(radius)
+function volumetric_clouds:calculate_max_ray_distance(radius)
 	local inner_distance = self:calculate_horizon_distance(radius, radius + self.atmosphere_start_height_)
 	local outer_distance = self:calculate_horizon_distance(radius, radius + self.atmosphere_end_height_)
 	return outer_distance - inner_distance
 end
 
-function planet_clouds:calculate_planet_radius(atmosphere_height, horizon_distance)
+function volumetric_clouds:calculate_planet_radius(atmosphere_height, horizon_distance)
 	local radius = atmosphere_height * atmosphere_height + horizon_distance * horizon_distance
 	radius = radius / (2.0 * atmosphere_height)
 	return radius - atmosphere_height
 end
 
-function planet_clouds:set_uniforms(max_iterations)
+function volumetric_clouds:set_uniforms(max_iterations)
 
     root.Shader.get():uniform("_MaxIterations", max_iterations)
-
 	root.Shader.get():uniform("_CloudBottomFade", self.cloud_bottom_fade_)
 	root.Shader.get():uniform("_SampleScalar", self.sample_scalar_)
 	root.Shader.get():uniform("_SampleThreshold", self.sample_threshold_)
@@ -192,26 +180,21 @@ function planet_clouds:set_uniforms(max_iterations)
 	self.detail_tex_:bind()
 end
 
-function planet_clouds:draw(camera, max_iterations)
+function volumetric_clouds:bind_coverage()
 
-    if self.is_loaded_ then
+    local earth_radius = self:calculate_planet_radius(self.atmosphere_start_height_, self.horizon_distance_)
     
-        self.shader_:bind()	
-        root.Shader.get():uniform("u_InvProjMatrix", math.inverse(math.perspective(camera.fov, camera.aspect, 1.0, 100.0)))
-        root.Shader.get():uniform("u_InvRotation", mat3(math.inverse(camera.view_matrix)))
-        
-        local earth_radius = self:calculate_planet_radius(self.atmosphere_start_height_, self.horizon_distance_)
-        root.Shader.get():uniform("_CameraPosition", camera.position + vec3(0, earth_radius, 0))        
-        root.Shader.get():uniform("_LightDirection", self.planet_.scene_.sun_:get_direction())
-        root.Shader.get():uniform("_LightColor", vec3(1.0))
-        self:set_uniforms(max_iterations)
-        
-        self.screen_quad_:draw()
-        root.Shader.pop_stack()
-    end
+    root.Shader.get():uniform("u_EarthRadius", earth_radius)	
+    root.Shader.get():uniform("u_StartHeight", self.atmosphere_start_height_)	
+    root.Shader.get():uniform("u_CoverageScale", 1.0 / self:calculate_max_distance(earth_radius))
+    root.Shader.get():uniform("u_CoverageOffset", self.coverage_offset_)
+
+    gl.ActiveTexture(gl.TEXTURE6)
+    root.Shader.get():sampler("s_Coverage", 6)
+    self.coverage_tex_:bind()
 end
 
-function planet_clouds:__update(dt)
+function volumetric_clouds:__update(dt)
 
     if sf.Keyboard.is_key_pressed(sf.Keyboard.T) then
        self.animation_scale_ = 20.0
@@ -219,8 +202,22 @@ function planet_clouds:__update(dt)
        self.animation_scale_ = 1.0
     end
 
-    if self.is_loaded_ then
-        self.coverage_offset_ = self.coverage_offset_ + (self.coverage_offset_per_frame_ * self.animation_scale_ * dt)
-        self.base_offset_ = self.base_offset_ + (self.base_offset_per_frame_ * self.animation_scale_ * dt)
-    end
+    self.coverage_offset_ = self.coverage_offset_ + (self.coverage_offset_per_frame_ * self.animation_scale_ * dt)
+    self.base_offset_ = self.base_offset_ + (self.base_offset_per_frame_ * self.animation_scale_ * dt)
+end
+
+function volumetric_clouds:draw(camera, lightdir, max_iterations)
+
+    self.shader_:bind()	
+    root.Shader.get():uniform("u_InvProjMatrix", math.inverse(math.perspective(camera.fov, camera.aspect, 1.0, 100.0)))
+    root.Shader.get():uniform("u_InvRotation", mat3(math.inverse(camera.view_matrix)))
+    
+    local earth_radius = self:calculate_planet_radius(self.atmosphere_start_height_, self.horizon_distance_)
+    root.Shader.get():uniform("_CameraPosition", camera.position + vec3(0, earth_radius, 0))        
+    root.Shader.get():uniform("_LightDirection", lightdir)
+    root.Shader.get():uniform("_LightColor", vec3(1.0))
+    self:set_uniforms(max_iterations)
+    
+    self.screen_quad_:draw()
+    root.Shader.pop_stack()
 end

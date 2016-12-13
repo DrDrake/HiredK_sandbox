@@ -1,110 +1,64 @@
 #include "atmosphere/common.h"
 
-#define MAX_NUM_SHADOW_SPLITS 4
+#define PI 3.1415926535897932
+#define ONE_OVER_PI	0.318309
 
-uniform sampler2DArray s_SunDepthTex;
-uniform sampler2D s_Coverage;
-
-uniform vec3 u_SectorCameraPos;
-uniform samplerCube s_Cubemap;
-
-uniform float u_DepthSplit;
-uniform bool u_EnableLogZ;
-uniform vec2 u_CameraClip;
-uniform vec3 u_CameraPosition;
-uniform vec3 u_SunDirection;
-uniform float u_OceanLevel;
-
-uniform mat4 u_SunShadowMatrix[MAX_NUM_SHADOW_SPLITS];
-uniform float u_SunShadowResolution;
-uniform vec4 u_SunShadowSplits;
-
-uniform float u_CoverageScale;
-uniform vec2 u_CoverageOffset;
-uniform float u_EarthRadius;
-uniform float u_StartHeight;
-
-float Fcoef(float z) {
-	return 2.0 / log2(z + 1.0);
-}
-
-float textureCompare(sampler2DArray depths, float index, vec2 uv, float compare)
+vec3 BRDF_Atmospheric(vec3 pos, vec3 n, vec3 color, vec3 camera, vec3 sun, float shadow)
 {
-	float depth = texture(depths, vec3(uv, index)).r;
-	return step(compare, depth);
-}
-
-float textureShadowLerp(sampler2DArray depths, float index, vec2 size, vec2 uv, float compare)
-{
-	vec2 texelSize = vec2(1.0) / size;
-	vec2 f = fract(uv * size + 0.5);
-	vec2 centroidUV = floor(uv * size + 0.5) / size;
-	
-	float lb = textureCompare(depths, index, centroidUV + texelSize * vec2(0.0, 0.0), compare);
-	float lt = textureCompare(depths, index, centroidUV + texelSize * vec2(0.0, 1.0), compare);
-	float rb = textureCompare(depths, index, centroidUV + texelSize * vec2(1.0, 0.0), compare);
-	float rt = textureCompare(depths, index, centroidUV + texelSize * vec2(1.0, 1.0), compare);	
-	float a = mix(lb, lt, f.y);
-	float b = mix(rb, rt, f.y);
-	return mix(a, b, f.x);
-}
-
-float PCF(sampler2DArray depths, float index, vec2 size, vec2 uv, float compare)
-{
-	float result = 0.0;	
-	for(int x = -1; x <= 1; x++)
-	for(int y = -1; y <= 1; y++) {
-		result += textureShadowLerp(depths, index, size, uv + (vec2(x, y) / size), compare);
-	}
-
-	return result / 9.0;
-}
-
-vec3 InternalRaySphereIntersect(float radius, vec3 origin, vec3 direction)
-{	
-	float a0 = radius * radius - dot(origin, origin);
-	float a1 = dot(origin, direction);
-	float result = sqrt(a1 * a1 + a0) - a1;
-	
-	return origin + direction * result;
-}
-
-float GetCloudsShadowFactor(vec3 pos)
-{
-	vec3 intersect = InternalRaySphereIntersect(u_EarthRadius + u_StartHeight, pos, u_SunDirection);	
-	vec2 unit = intersect.xz * u_CoverageScale;
-	vec2 coverageUV = unit * 0.5 + 0.5;
-	coverageUV += u_CoverageOffset;
-	
-	vec4 coverage = texture(s_Coverage, coverageUV);
-	float cloudShadow = coverage.r;	
-	cloudShadow *= 0.5;
-	
-	return 1.0 - cloudShadow;
-}
-
-float GetShadowFactor(vec3 pos, float depth)
-{
-	float factor = GetCloudsShadowFactor(pos + vec3(0, u_EarthRadius, 0)); // temp
+	vec3 V = normalize(pos);
+	vec3 P = V * max(length(pos), 6360000.0 + 10.0);
     
-	int index = 0;
-	if (depth < u_SunShadowSplits.x) {
-		index = 0;
-	}
-	else if (depth < u_SunShadowSplits.y) {
-		index = 1;
-	}
-	else if (depth < u_SunShadowSplits.z) {
-		index = 2;
-	}
-	else if (depth < u_SunShadowSplits.w) {
-		index = 3;
-	}
-	else {
-		return factor;
-	}
+	vec3 sunL;
+	vec3 skyE;
+	sunRadianceAndSkyIrradiance(P, n, sun, sunL, skyE);	
+	float cTheta = dot(n, sun) * shadow;
+
+	vec3 result = color * 0.05 * (sunL * max(cTheta, 0.1) + skyE) / M_PI;
 	
-	vec4 shadow_coord = u_SunShadowMatrix[index] * vec4(pos, 1);	
-	factor *= PCF(s_SunDepthTex, index, vec2(u_SunShadowResolution), shadow_coord.xy, shadow_coord.z);
-	return factor;
+	vec3 extinction;
+	vec3 inscatter = inScattering(camera, P, sun, extinction, 0.0) * 0.08;
+	return result * extinction + inscatter;
+}
+
+vec3 F_Schlick(vec3 f0, float u)
+{
+	return f0 + (vec3(1.0) - f0) * pow(1.0 - u, 5.0);
+}
+
+float Vis_Schlick(float ndotl, float ndotv, float roughness)
+{
+	float a = roughness + 1.0;
+	float k = a * a * 0.125;
+
+	float Vis_SchlickV = ndotv * (1 - k) + k;
+	float Vis_SchlickL = ndotl * (1 - k) + k;
+
+	return 0.25 / (Vis_SchlickV * Vis_SchlickL);
+}
+
+float D_GGX(float ndoth, float roughness)
+{
+	float m = roughness * roughness;
+	float m2 = m * m;
+	float d = (ndoth * m2 - ndoth) * ndoth + 1.0;
+
+	return m2 / max(PI * d * d, 1e-8);
+}
+
+vec3 BRDF_Lambertian(vec3 albedo, float metalness)
+{
+	vec3 color = mix(albedo, vec3(0.0), metalness);
+	color *= ONE_OVER_PI;
+	return color;
+}
+
+vec3 BRDF_CookTorrance(float ldoth, float ndoth, float ndotv, float ndotl, float roughness, float metalness)
+{
+	vec3 F0 = mix(vec3(0.04), vec3(1), metalness);
+	vec3 F = F_Schlick(F0, ldoth);
+
+	float Vis = Vis_Schlick(ndotl, ndotv, roughness);
+	float D = D_GGX(ndoth, roughness);
+
+	return F * Vis * D;
 }

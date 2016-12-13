@@ -1,71 +1,59 @@
 #version 400 core
 
-#include "common.h"
-
 uniform mat4 u_ViewProjMatrix;
 uniform mat4 u_ModelMatrix;
 uniform mat3 u_NormalMatrix;
 
-uniform vec2 u_TexCoordScale;
-uniform bool u_VertexColor;
-uniform sampler2D s_Tex0;
+uniform sampler2D s_Albedo;
+uniform sampler2D s_Normal;
 
-uniform bool u_EnableColor = false;
-uniform float u_Alpha = 1.0;
-uniform vec4 u_Color;
+uniform vec3 u_WorldCamPosition;
+uniform vec3 u_SunDirection;
 
 -- vs
 layout(location = 0) in vec3 vs_Position;
-layout(location = 1) in vec3 vs_Normal;
-layout(location = 2) in vec2 vs_TexCoord;
-layout(location = 3) in vec3 vs_Color;
+layout(location = 1) in vec2 vs_TexCoord;
+layout(location = 2) in vec4 vs_Color;
+layout(location = 3) in vec3 vs_Normal;
+layout(location = 4) in vec3 vs_Tangent;
 out vec3 fs_Position;
-out vec3 fs_Normal;
 out vec2 fs_TexCoord;
-out vec3 fs_Color;
-out float fs_Flogz;
+out mat3 fs_TBN;
 
 void main()
 {	
-	gl_Position = u_ViewProjMatrix * u_ModelMatrix * vec4(vs_Position.xyz, 1);  
-    fs_Position = vec3(u_ModelMatrix * vec4(vs_Position.xyz, 1));
-	fs_Normal = u_NormalMatrix * vs_Normal;
-	fs_TexCoord = vs_TexCoord;
-    fs_Color = vs_Color;
-    
-    if (u_EnableLogZ) {
-        gl_Position.z = log2(max(1e-6, 1.0 + gl_Position.w)) * Fcoef(u_CameraClip.y);
-        fs_Flogz = 1.0 + gl_Position.w;
-    }
+	fs_Position = (u_ModelMatrix * vec4(vs_Position.xyz, 1)).xyz;
+	gl_Position = u_ViewProjMatrix * vec4(fs_Position.xyz, 1);  
+    fs_TexCoord = vs_TexCoord;
+	
+	vec3 n = u_NormalMatrix * vs_Normal;
+    vec3 t = u_NormalMatrix * vs_Tangent;
+	
+	vec3 N = normalize(n);
+	vec3 T = normalize(t - dot(t, N) * N);
+	vec3 B = cross(N, T);
+	
+	fs_TBN = mat3(T, B, N);
 }
 
 -- fs
-layout(location = 0) out vec4 diffuse;
-layout(location = 1) out vec4 geometric;
+layout(location = 0) out vec4 albedo;
+layout(location = 1) out vec4 normal;
 in vec3 fs_Position;
-in vec3 fs_Normal;
 in vec2 fs_TexCoord;
-in vec3 fs_Color;
-in float fs_Flogz;
+in mat3 fs_TBN;
 
 void main()
 {
-    vec4 color = vec4(0, 0, 0, u_Alpha);
-    
-    if (u_EnableColor) {
-        color = u_Color;
-    }
-    else {
-        color = texture(s_Tex0, fs_TexCoord * u_TexCoordScale);
-    }
-    
-    if (u_EnableLogZ) {
-        gl_FragDepth = log2(fs_Flogz) * 0.5 * Fcoef(u_CameraClip.y);
-    }
-    else {
-        gl_FragDepth = gl_FragCoord.z;
-    }
-    
-	diffuse = vec4(color.rgb * 0.02, color.a * u_Alpha);
-    geometric = vec4(fs_Normal * 0.5 + 0.5, 0.05);
+	vec4 color = texture(s_Albedo, fs_TexCoord);
+	
+	vec4 n = texture(s_Normal, fs_TexCoord);
+	n.xyz = normalize(n.xyz * 2.0 - 1.0);
+	
+	n.xyz = n.xyz * vec3(0.2f, 0.2f, 1.0); // temp smooth normal
+	
+	n.xyz = normalize(fs_TBN * n.xyz);
+	
+	albedo = vec4(color.rgb, color.a);
+    normal = vec4(n.xyz * 0.5 + 0.5, n.a);
 }

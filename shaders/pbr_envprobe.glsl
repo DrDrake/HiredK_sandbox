@@ -11,14 +11,13 @@ uniform sampler2D s_Tex1; // albedo
 uniform sampler2D s_Tex2; // normal
 uniform sampler2D s_Tex3; // occlusion
 
+uniform sampler2D s_BRDF;
+uniform samplerCube s_GlobalCubemap;
+uniform samplerCube s_LocalCubemap;
+
 uniform vec3 u_LocalCubemapPosition;
 uniform vec3 u_LocalCubemapExtent;
-uniform vec3 u_LocalCubemapOffset;
 uniform bool u_LocalPass;
-
-uniform samplerCube s_GlobalCubemap;
-uniform sampler2D s_BRDF;
-uniform samplerCube s_LocalCubemap;
 
 -- vs
 layout(location = 0) in vec3 vs_Position;
@@ -47,6 +46,13 @@ vec3 GetWorldPos(vec2 uv, float depth)
 	return pos.xyz;
 }
 
+float computeDistanceBaseRoughness( float distInteresectionToShadedPoint, float distInteresectionToProbeCenter, float linearRoughness )
+{
+	float newLinearRoughness = clamp ( distInteresectionToShadedPoint /
+									  distInteresectionToProbeCenter * linearRoughness , 0.0, linearRoughness );
+	return mix( newLinearRoughness , linearRoughness , linearRoughness );
+}
+
 vec3 getBoxIntersection( vec3 pos, vec3 reflectionVector, vec3 cubeSize, vec3 cubePos )
 {
 	vec3 rbmax = (   0.5f * ( cubeSize - cubePos ) - pos ) / reflectionVector;
@@ -61,13 +67,6 @@ vec3 getBoxIntersection( vec3 pos, vec3 reflectionVector, vec3 cubeSize, vec3 cu
 	return ( pos + reflectionVector * correction );
 }
 
-float computeDistanceBaseRoughness( float distInteresectionToShadedPoint, float distInteresectionToProbeCenter, float linearRoughness )
-{
-	float newLinearRoughness = clamp ( distInteresectionToShadedPoint /
-									  distInteresectionToProbeCenter * linearRoughness , 0.0, linearRoughness );
-	return mix( newLinearRoughness , linearRoughness , linearRoughness );
-}
-
 void main()
 {
     float depth = textureProj(s_Tex0, fs_ProjCoord).r;
@@ -79,10 +78,10 @@ void main()
     float metalness = clamp(normal.a, 0.0, 1.0);
 	
     vec2 uv = fs_ProjCoord.xy / fs_ProjCoord.z; 
-    vec3 wpos = GetWorldPos(uv, depth) - u_LocalCubemapOffset;
-
+    vec3 wpos = GetWorldPos(uv, depth);
+	
 	vec3 N = normalize(normal.xyz * 2.0 - 1.0);
-	vec3 V = normalize((u_WorldCamPosition - u_LocalCubemapOffset) - wpos);
+	vec3 V = normalize(u_WorldCamPosition - wpos);
 	vec3 R = reflect(-V, N);
 	
 	float ndotv = clamp(dot(N, V), 0.0, 1.0);
@@ -100,18 +99,26 @@ void main()
 	
 	if (wpos.x > u_LocalCubemapPosition.x - u_LocalCubemapExtent.x && wpos.x < u_LocalCubemapPosition.x + u_LocalCubemapExtent.x &&
 		wpos.y > u_LocalCubemapPosition.y - u_LocalCubemapExtent.y && wpos.y < u_LocalCubemapPosition.y + u_LocalCubemapExtent.y &&
-		wpos.z > u_LocalCubemapPosition.z - u_LocalCubemapExtent.z && wpos.z < u_LocalCubemapPosition.x + u_LocalCubemapExtent.z)
+		wpos.z > u_LocalCubemapPosition.z - u_LocalCubemapExtent.z && wpos.z < u_LocalCubemapPosition.z + u_LocalCubemapExtent.z)
 	{
 		if (!u_LocalPass) {
 			discard;
 		}
 		
-		vec3 boxInters = getBoxIntersection(wpos, R, vec3(93, 52, 45.5), u_LocalCubemapPosition);
-		vec3 lookup = boxInters - u_LocalCubemapPosition;
+		wpos = wpos - u_LocalCubemapPosition;
+		V = normalize((u_WorldCamPosition - u_LocalCubemapPosition) - wpos);
+		R = reflect(-V, N);
 		
-		distRough = computeDistanceBaseRoughness(length(wpos - boxInters), length(u_LocalCubemapPosition - boxInters), 0.09f + roughness);
+		ndotv = clamp(dot(N, V), 0.0, 1.0);
+		f0_scale_bias = texture(s_BRDF, vec2(ndotv, roughness)).rg;
+		F = F0 * f0_scale_bias.x + vec3(f0_scale_bias.y);
+		
+		distRough = computeDistanceBaseRoughness(length(wpos), 0.0f, 0.09f + roughness);
 		mip = 1.0 - 1.2 * log2(distRough);
 		mip = numMips - 1.0 - mip;
+		
+		vec3 boxInters = getBoxIntersection(wpos, R, u_LocalCubemapExtent * 2, vec3(0, 0, 0));
+		vec3 lookup = boxInters - vec3(0, 0, 0);
 		
 		vec4 local_color = textureLod(s_LocalCubemap, lookup, mip);		
 		color = mix(color, local_color, local_color.a);

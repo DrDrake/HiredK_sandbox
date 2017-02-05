@@ -9,6 +9,9 @@ uniform vec4 _TileWSD;
 uniform sampler2D _CoarseLevelSampler; 
 uniform vec4 _CoarseLevelOSL; 
 
+uniform sampler2D _ResidualSampler;
+uniform vec4 _ResidualOSH; 
+
 uniform float _Amp;
 uniform vec4 _Offset;
 uniform mat4 _LocalToWorld;
@@ -187,7 +190,8 @@ void main() {
 	vec2 p_uv = floor(fs_ST) * 0.5;
 	vec2 uv = (p_uv - fract(p_uv) + vec2(0.5,0.5)) * _CoarseLevelOSL.z + _CoarseLevelOSL.xy;
 	
-	float zf = 0;
+	vec2 residual_uv = p_uv * _ResidualOSH.z + _ResidualOSH.xy;
+    float zf = _ResidualOSH.w * textureLod(_ResidualSampler, residual_uv, 0).x;
 	
 	mat4 cz = mat4(
 		textureLod(_CoarseLevelSampler, uv + vec2(0.0, 0.0) *  _CoarseLevelOSL.z, 0).x,

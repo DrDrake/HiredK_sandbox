@@ -1,5 +1,7 @@
 #version 400 core
 
+#include "common.h"
+
 uniform mat4 u_ViewProjMatrix;
 uniform mat4 u_ModelMatrix;
 uniform mat3 u_NormalMatrix;
@@ -9,6 +11,7 @@ uniform sampler2D s_Normal;
 
 uniform vec3 u_WorldCamPosition;
 uniform vec3 u_SunDirection;
+uniform float u_DeferredDist;
 
 -- vs
 layout(location = 0) in vec3 vs_Position;
@@ -49,11 +52,13 @@ void main()
 	
 	vec4 n = texture(s_Normal, fs_TexCoord);
 	n.xyz = normalize(n.xyz * 2.0 - 1.0);
-	
-	n.xyz = n.xyz * vec3(0.2f, 0.2f, 1.0); // temp smooth normal
-	
 	n.xyz = normalize(fs_TBN * n.xyz);
 	
+	if (gl_FragCoord.z >= u_DeferredDist) {
+		vec3 L = normalize(u_SunDirection);
+		color.rgb = BRDF_Atmospheric(fs_Position + vec3(0, 6360000.0, 0), n.xyz, color.rgb, u_WorldCamPosition + vec3(0, 6360000.0, 0), L, 1.0);
+	}
+	
 	albedo = vec4(color.rgb, color.a);
-    normal = vec4(n.xyz * 0.5 + 0.5, n.a);
+    normal = vec4(n.xyz * 0.5 + 0.5, 0.02);
 }

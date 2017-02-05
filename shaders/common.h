@@ -62,3 +62,21 @@ vec3 BRDF_CookTorrance(float ldoth, float ndoth, float ndotv, float ndotl, float
 
 	return F * Vis * D;
 }
+
+float GetCloudsShadowFactor(sampler2D tex, float radius, vec3 origin, vec3 direction, vec2 offset, float scale)
+{
+    float a0 = radius * radius - dot(origin, origin);
+	float a1 = dot(origin, direction);
+	float result = sqrt(a1 * a1 + a0) - a1;
+    
+	vec3 intersect = origin + direction * result;	
+	vec2 unit = intersect.xz * scale;
+	vec2 coverageUV = unit * 0.5 + 0.5;
+	coverageUV += offset;
+	
+	vec4 coverage = texture(tex, coverageUV);
+	float cloudShadow = coverage.r;	
+	cloudShadow *= 0.5;
+	
+	return 1.0 - cloudShadow;
+}

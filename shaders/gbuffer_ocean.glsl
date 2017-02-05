@@ -21,7 +21,6 @@ uniform vec4 GRID_SIZES;
 layout(location = 0) in vec4 vs_Position;
 out vec3 fs_Position;
 out vec2 fs_TexCoord;
-out float fs_Flogz;
 
 vec2 oceanPos(vec3 vertex, out float t, out vec3 cameraDir, out vec3 oceanDir) {
     float horizon = _Ocean_Horizon1.x + _Ocean_Horizon1.y * vertex.x - sqrt(_Ocean_Horizon2.x + (_Ocean_Horizon2.y + _Ocean_Horizon2.z * vertex.x) * vertex.x);
@@ -78,13 +77,10 @@ void main()
 }
 
 -- fs
-layout(location = 0) out vec4 diffuse;
-layout(location = 1) out vec4 geometric;
+layout(location = 0) out vec4 albedo;
+layout(location = 1) out vec4 normal;
 in vec3 fs_Position;
 in vec2 fs_TexCoord;
-in float fs_Flogz;
-
-const vec3 OceanColor = vec3(0.039f, 0.156f, 0.47f);
 
 void main()
 {
@@ -115,6 +111,6 @@ void main()
     float roughness = max(texture(slopeVarianceSampler, vec3(ua, ub, uc)).x, 2e-5);
 	vec3 fn = normalize(mat3(_Ocean_OceanToWorld) * N);
 
-	diffuse = vec4(OceanColor, roughness);
-	geometric = vec4(fn * 0.5 + 0.5, 0.1);
+	albedo = vec4(0.039, 0.156, 0.47, roughness);
+	normal = vec4(fn * 0.5 + 0.5, 0.1);
 }

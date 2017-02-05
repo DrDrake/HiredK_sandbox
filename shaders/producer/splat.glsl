@@ -31,9 +31,9 @@ void main()
     float slope = clamp(dot(normalize(fn), vec3(0, 0, 1)), 0, 1);
 
     vec4 splat; 
-    splat.r = (h <= 6.0 && slope >= SLOPE_LIMIT) ? 1.0 : 0.0;
-    splat.g = (h >  6.0 && slope >= SLOPE_LIMIT) ? 1.0 : 0.0;
-    splat.b = (slope < SLOPE_LIMIT) ? 1.0 : 0.0;
+    splat.r = (h <= 6.0 && abs(slope) >= SLOPE_LIMIT) ? 1.0 : 0.0;
+    splat.g = (h >  6.0 && abs(slope) >= SLOPE_LIMIT) ? 1.0 : 0.0;
+    splat.b = (abs(slope) < SLOPE_LIMIT) ? 1.0 : 0.0;
     splat.a = 1.0;
     
 	frag = splat;

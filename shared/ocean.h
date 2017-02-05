@@ -19,6 +19,7 @@ function ocean:__init()
     
     self.waves_ = root.WavesSpectrum()
     self.timer_ = 0.0
+	self.disabled_ = false
     
     self.offset_ = vec3()
     self.old_ltoo_ = mat4()
@@ -78,6 +79,11 @@ end
 
 function ocean:__update(dt)
 
+	if self.disabled_ then
+		return
+	end
+	
+	gl.PushAttrib(gl.VIEWPORT_BIT)
     gl.Viewport(0, 0, self.waves_.size, self.waves_.size)
     self.timer_ = self.timer_ + dt
     
@@ -163,6 +169,7 @@ function ocean:__update(dt)
     self.ffta_tex_:generate_mipmap()   
     root.FrameBuffer.unbind()
     root.Shader.pop_stack()
+	gl.PopAttrib()
 end
 
 function ocean:draw(camera, radius)
@@ -170,10 +177,24 @@ function ocean:draw(camera, radius)
 	local ctol = math.inverse(camera.view_matrix)
 	local cl = vec3(ctol * vec4(0, 0, 0, 1))	
 
-	local uz = math.normalize(cl)
-	local ux = math.normalize(math.cross(vec3(0, 0, 1), uz))
-	local uy = math.cross(uz, ux)	
-	local oo = uz * radius
+	local uz = vec3()
+	local ux = vec3()
+	local uy = vec3()
+    local oo = vec3()
+	
+	if radius == 0.0 then
+	
+		ux = vec3(1, 0, 0)
+		uy = vec3(0, 1, 0)
+		uz = vec3(0, 0, 1)
+		oo = vec3(cl.x, cl.y, 0)
+	else
+	
+		uz = math.normalize(cl)
+		ux = math.normalize(math.cross(vec3(0, 0, 1), uz))
+		uy = math.cross(uz, ux)	
+		oo = uz * radius
+	end
 	
 	local ltoo = math.transpose(mat4.from_table({
 		ux.x, ux.y, ux.z, -math.dot(ux, oo),
@@ -204,17 +225,27 @@ function ocean:draw(camera, radius)
 	local dA = vec3(ctoo * stoc_x)
 	local B  = vec3(ctoo * stoc_y)
 	
-	local h1 = h * (h + 2.0 * radius)
-	local h2 = (h + radius) * (h + radius)
-	local alpha = math.dot(B, B) * h1 - B.z * B.z * h2
-	local beta0 = (math.dot(A0, B) * h1 - B.z * A0.z * h2) / alpha
-	local beta1 = (math.dot(dA, B) * h1 - B.z * dA.z * h2) / alpha
-	local gamma0 = (math.dot(A0, A0) * h1 - A0.z * A0.z * h2) / alpha
-	local gamma1 = (math.dot(A0, dA) * h1 - A0.z * dA.z * h2) / alpha
-	local gamma2 = (math.dot(dA, dA) * h1 - dA.z * dA.z * h2) / alpha
+	local horizon1 = vec3()
+	local horizon2 = vec3()	
+	
+	if radius == 0.0 then
+	
+		horizon1 = vec3(-(h * 1e-6 + A0.z) / B.z, -dA.z / B.z, 0.0)
+		horizon2 = vec3(0, 0, 0)
+	else
+	
+		local h1 = h * (h + 2.0 * radius)
+		local h2 = (h + radius) * (h + radius)	
+		local alpha = math.dot(B, B) * h1 - B.z * B.z * h2
+		local beta0 = (math.dot(A0, B) * h1 - B.z * A0.z * h2) / alpha
+		local beta1 = (math.dot(dA, B) * h1 - B.z * dA.z * h2) / alpha
+		local gamma0 = (math.dot(A0, A0) * h1 - A0.z * A0.z * h2) / alpha
+		local gamma1 = (math.dot(A0, dA) * h1 - A0.z * dA.z * h2) / alpha
+		local gamma2 = (math.dot(dA, dA) * h1 - dA.z * dA.z * h2) / alpha
 
-	local horizon1 = vec3(-beta0, -beta1, 0)
-	local horizon2 = vec3(beta0 * beta0 - gamma0, 2.0 * (beta0 * beta1 - gamma1), beta1 * beta1 - gamma2)
+		horizon1 = vec3(-beta0, -beta1, 0)
+		horizon2 = vec3(beta0 * beta0 - gamma0, 2.0 * (beta0 * beta1 - gamma1), beta1 * beta1 - gamma2)
+	end
     
     self.shader_:bind()
 	

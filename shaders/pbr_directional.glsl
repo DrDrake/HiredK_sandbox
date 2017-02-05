@@ -1,8 +1,8 @@
 #version 400 core
 
-#define MAX_NUM_SHADOW_SPLITS 4
-
 #include "common.h"
+
+#define MAX_NUM_SHADOW_SPLITS 4
 
 uniform sampler2D s_Tex0; // depth
 uniform sampler2D s_Tex1; // albedo
@@ -13,6 +13,7 @@ uniform mat4 u_LightShadowMatrix[MAX_NUM_SHADOW_SPLITS];
 uniform float u_LightShadowResolution;
 uniform vec4 u_LightShadowSplits;
 uniform vec3 u_LightDirection;
+
 uniform sampler2DArray s_LightDepthTex;
 
 uniform float u_EarthRadius;
@@ -83,24 +84,6 @@ float PCF(sampler2DArray depths, float index, vec2 size, vec2 uv, float compare)
 	return result / 9.0;
 }
 
-float GetCloudsShadowFactor(sampler2D tex, float radius, vec3 origin, vec3 direction, vec2 offset, float scale)
-{
-    float a0 = radius * radius - dot(origin, origin);
-	float a1 = dot(origin, direction);
-	float result = sqrt(a1 * a1 + a0) - a1;
-    
-	vec3 intersect = origin + direction * result;	
-	vec2 unit = intersect.xz * scale;
-	vec2 coverageUV = unit * 0.5 + 0.5;
-	coverageUV += offset;
-	
-	vec4 coverage = texture(tex, coverageUV);
-	float cloudShadow = coverage.r;	
-	cloudShadow *= 0.5;
-	
-	return 1.0 - cloudShadow;
-}
-
 float GetShadowFactor(vec3 pos, float depth)
 {
 	float factor = GetCloudsShadowFactor(s_Coverage, u_EarthRadius + u_StartHeight, pos + vec3(0, u_EarthRadius, 0), u_LightDirection, u_CoverageOffset, u_CoverageScale);   
@@ -130,7 +113,7 @@ float GetShadowFactor(vec3 pos, float depth)
 void main()
 {
     float depth = texture(s_Tex0, fs_TexCoord).r;
-	vec4 albedo = texture(s_Tex1, fs_TexCoord);
+	vec4 albedo = texture(s_Tex1, fs_TexCoord);	
 	
 	if (depth < u_DeferredDist)
 	{
@@ -138,8 +121,7 @@ void main()
 		float ao = 1.0 - texture(s_Tex3, fs_TexCoord).r;
 		
 		float roughness = clamp(albedo.a, 0.0, 1.0);
-		float metalness = clamp(normal.a, 0.0, 1.0);
-		
+		float metalness = clamp(normal.a, 0.0, 1.0);	
 		vec3 wpos = GetWorldPos(fs_TexCoord, depth);
 		float shadow = GetShadowFactor(wpos, depth);
 		
@@ -154,12 +136,8 @@ void main()
 		float ldoth = clamp(dot(L, H), 0.0, 1.0);
 		
 		vec3 fd = BRDF_Atmospheric(wpos + vec3(0, 6360000.0, 0), N, albedo.rgb, u_WorldCamPosition + vec3(0, 6360000.0, 0), L, shadow);
-		
-		// temp fix this
-		//vec3 sr = sunRadiance(length(wpos + vec3(0, 6360000.0, 0)), dot((wpos + vec3(0, 6360000.0, 0)) / length(wpos + vec3(0, 6360000.0, 0)), L));	
-		//vec3 fs = BRDF_CookTorrance(ldoth, ndoth, ndotv, ndotl, roughness, metalness) * sr * shadow * 0.0008f;
-		albedo.rgb = (fd) * ao;
-	}	
+		albedo.rgb = fd * ao;
+	}
 	
     frag = vec4(albedo.rgb, 1);
 }

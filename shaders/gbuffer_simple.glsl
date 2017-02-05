@@ -23,5 +23,5 @@ in vec2 fs_TexCoord;
 void main()
 {
 	vec4 color = texture(s_Albedo, fs_TexCoord);
-	albedo = vec4(color.rgb * 0.1, 1);
+	albedo = vec4(color.rgb * 0.2, 1);
 }

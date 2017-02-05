@@ -1,8 +1,5 @@
 #version 400 core
 
-uniform sampler2D s_Tex0;
-uniform sampler2D s_Tex1;
-
 uniform mat4 u_ViewProjMatrix;
 uniform mat4 u_ModelMatrix;
 uniform mat3 u_NormalMatrix;
@@ -21,25 +18,26 @@ out vec3 fs_Normal;
 out vec3 fs_Tangent;
 
 float hash( float n ) {
-    return fract(sin(n)*43758.5453);
+    return fract(sin(n) * 43758.5453);
 }
 
 float noise( in vec2 x )
 {
     vec2 p = floor(x);
     vec2 f = fract(x);
-    f = f*f*(3.0-2.0*f);
-    float n = p.x + p.y*57.0;
-    float res = mix(mix( hash(n+  0.0), hash(n+  1.0),f.x), mix( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y);
+    f = f*f * (3.0 - 2.0 * f);
+    float n = p.x + p.y * 57.0;
+    float res = mix(mix( hash(n + 0.0), hash(n + 1.0), f.x), mix( hash(n + 57.0), hash(n + 58.0), f.x), f.y);
     return res;
 }
 
 float fbm( vec2 p )
 {
     float f = 0.0;
-    f += 0.50000*noise( p ); p = p*2.02;
-    f += 0.03125*noise( p );
-    return f/0.984375;
+    f += 0.50000 * noise(p);
+	p = p * 2.02;
+    f += 0.03125 * noise(p);
+    return f / 0.984375;
 }
 
 void main()

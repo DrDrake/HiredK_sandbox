@@ -8,14 +8,16 @@ class 'render_pipeline' (root.ScriptObject)
 function render_pipeline:__init(planet)
     root.ScriptObject.__init(self, "render_pipeline")
     self.planet_ = planet
-    
+	
     self.gbuffer_shader_ = FileSystem:search("shaders/gbuffer.glsl", true)
     self.sky_shader_ = FileSystem:search("shaders/sky.glsl", true)
     self.gauss1d_shader_ = FileSystem:search("shaders/gauss1d.glsl", true)
     self.scalebias_shader_ = FileSystem:search("shaders/scalebias.glsl", true)
-    self.final_shader_ = FileSystem:search("shaders/final.glsl", true)
-    self.screen_quad_ = root.Mesh.build_quad()
+	self.final_shader_ = FileSystem:search("shaders/final.glsl", true)
+	self.screen_quad_ = root.Mesh.build_quad()
+	
 	self.prev_view_proj_matrix_ = mat4()
+	self.local_camera_ = root.Camera()
 	
     -- occlusion
     self.bilateral_shader_ = FileSystem:search("shaders/bilateral.glsl", true)
@@ -39,17 +41,22 @@ end
 
 function render_pipeline:rebuild(w, h)
 
+	if self.gbuffer_depth_tex_ and self.gbuffer_depth_tex_.w == w and self.gbuffer_depth_tex_.h == h then
+		return
+	end
+
     self.gbuffer_fbo_ = root.FrameBuffer()
     self.gbuffer_depth_tex_ = root.Texture.from_empty(w, h, { iformat = gl.DEPTH32F_STENCIL8, format = gl.DEPTH_COMPONENT, type = gl.FLOAT })
     self.gbuffer_albedo_tex_ = root.Texture.from_empty(w, h)
     self.gbuffer_normal_tex_ = root.Texture.from_empty(w, h)
-    
-    self.render_fbo_ = root.FrameBuffer()
-    self.render_tex_ = root.Texture.from_empty(w, h, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
+	
+	self.render_fbo_ = root.FrameBuffer()
+	self.render_tex_ = root.Texture.from_empty(w, h, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
 	self.render_smaa_tex_ = root.Texture.from_empty(w, h, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
-    self.clouds_tex_ = root.Texture.from_empty(w / 2, h / 2, { iformat = gl.RGBA8, filter_mode = gl.LINEAR })
+	self.clouds_tex_ = root.Texture.from_empty(w / 2, h / 2, { iformat = gl.RGBA8, filter_mode = gl.LINEAR })
 	self.bloom_tex_ = root.Texture.from_empty(w / 4, h / 4, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
 	self.bloom_blur_tex_ = root.Texture.from_empty(w / 4, h / 4, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
+	self.final_tex_ = root.Texture.from_empty(w, h, { iformat = gl.RGB16F, format = gl.RGB, type = gl.FLOAT, filter_mode = gl.LINEAR })
 	
 	-- occlusion
 	self.occlusion_tex_ = root.Texture.from_empty(w, h, { iformat = gl.RG16F, format = gl.RG, type = gl.FLOAT })
@@ -67,6 +74,18 @@ function render_pipeline:rebuild(w, h)
 	-- lensflare
 	self.lensflare_tex_ = root.Texture.from_empty(w / 4, h / 4, { iformat = gl.RGBA16F, format = gl.RGBA, type = gl.FLOAT, filter_mode = gl.LINEAR })
 	self.lensflare_features_tex_ = root.Texture.from_empty(w / 4, h / 4, { iformat = gl.RGBA16F, format = gl.RGBA, type = gl.FLOAT, filter_mode = gl.LINEAR })
+end
+
+function render_pipeline:unproject(camera, x, y)
+
+	local viewport = vec4()
+	viewport.z = self.gbuffer_depth_tex_.w
+	viewport.w = self.gbuffer_depth_tex_.h
+
+	local depth = self.gbuffer_fbo_:read_pixel(self.gbuffer_depth_tex_, gl.DEPTH_STENCIL_ATTACHMENT, x, y).x
+    local pos = math.unproject(vec3(x, y, depth), camera.view_matrix, camera.proj_matrix, viewport)
+	root.FrameBuffer.unbind()
+	return pos
 end
 
 function render_pipeline:perform_blur(shader, input_tex, blur_tex)
@@ -278,7 +297,10 @@ function render_pipeline:process_lensflare(camera, input_tex)
     
 	local apply_lensflare = function()
 	
-		root.FrameBuffer.unbind()	
+        self.render_fbo_:clear()
+        self.render_fbo_:attach(input_tex, gl.COLOR_ATTACHMENT0)
+        self.render_fbo_:bind_output()
+		
 	    gl.BlendFunc(gl.ONE, gl.ONE)
 		gl.Enable(gl.BLEND)
 		
@@ -308,8 +330,10 @@ function render_pipeline:process_lensflare(camera, input_tex)
 		self.lensflare_star_tex_:bind()
 		
 		self.screen_quad_:draw()
-		root.Shader.pop_stack()
 		gl.Disable(gl.BLEND)
+		
+		root.Shader.pop_stack()
+		root.FrameBuffer.unbind()
 	end
 	
 	generate_lensflare()
@@ -319,6 +343,10 @@ function render_pipeline:process_lensflare(camera, input_tex)
 end
 
 function render_pipeline:render(dt, camera)
+
+	self.local_camera_:copy(camera)
+	self.local_camera_.position = camera.position - vec3(0, 6360000, 0)
+	self.local_camera_:refresh()
 
     local gbuffer_pass = function()
 
@@ -336,21 +364,20 @@ function render_pipeline:render(dt, camera)
         gl.StencilOp(gl.KEEP, gl.KEEP, gl.REPLACE)
         gl.StencilMask(0xFF)
         
-        self.gbuffer_shader_:bind()
-        
         gl.ClearColor(root.Color.Black)
         gl.Clear(bit.bor(gl.COLOR_BUFFER_BIT, gl.DEPTH_BUFFER_BIT, gl.STENCIL_BUFFER_BIT))
+		
+		self.gbuffer_shader_:bind()
         self.planet_:draw(camera)
-        
-        root.Shader.pop_stack()
+		root.Shader.pop_stack()
   
         gl.Disable(gl.DEPTH_TEST)
         gl.Disable(gl.STENCIL_TEST)
         gl.Disable(gl.CULL_FACE)        
         root.FrameBuffer.unbind()
     end
-    
-    local deferred_pass = function()
+	
+	local deferred_pass = function()
 	
          local generate_occlusion = function()
 
@@ -389,55 +416,88 @@ function render_pipeline:render(dt, camera)
             self:perform_blur(self.bilateral_shader_, self.occlusion_tex_, self.occlusion_blur_tex_)
             root.FrameBuffer.unbind()
         end
-		
+	
 		local generate_volumetric_clouds = function()
 		
-			self.render_fbo_:clear()
-			self.render_fbo_:attach(self.clouds_tex_, gl.COLOR_ATTACHMENT0)
-			self.render_fbo_:bind_output()
-			
-			gl.PushAttrib(gl.VIEWPORT_BIT)
-			gl.Viewport(0, 0, self.clouds_tex_.w, self.clouds_tex_.h)
-			gl.ClearColor(root.Color.Transparent)
-			gl.Clear(gl.COLOR_BUFFER_BIT)
-			
-			self.planet_.clouds_:draw(camera, self.planet_.sun_:get_direction(), 64)       
-			gl.PopAttrib()
+			if not camera.ortho then
+				self.render_fbo_:clear()
+				self.render_fbo_:attach(self.clouds_tex_, gl.COLOR_ATTACHMENT0)
+				self.render_fbo_:bind_output()
+				
+				gl.PushAttrib(gl.VIEWPORT_BIT)
+				gl.Viewport(0, 0, self.clouds_tex_.w, self.clouds_tex_.h)
+				gl.ClearColor(root.Color.Transparent)
+				gl.Clear(gl.COLOR_BUFFER_BIT)
+				
+				local local_camera = self.planet_.spherical_ and self.local_camera_ or camera
+				self.planet_.clouds_:draw(local_camera, self.planet_.sun_:get_direction(), 64)       
+				gl.PopAttrib()
+			end
 		end
-
+		
 		local deferred_sky_pass = function()
 		
-			gl.StencilFunc(gl.EQUAL, 0, 0xFF)
-			gl.StencilMask(0x00)
-		
-			self.sky_shader_:bind()
-			root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(camera.view_proj_origin_matrix))
-			root.Shader.get():uniform("u_LocalWorldPos", camera.position)
-			root.Shader.get():uniform("u_SunDirection", self.planet_.sun_:get_direction())
-			self.planet_.atmosphere_:bind(1000)
+			if not camera.ortho then
 			
-			gl.ActiveTexture(gl.TEXTURE0)
-			root.Shader.get():sampler("s_Clouds", 0)
-			self.clouds_tex_:bind()
-			
-			self.screen_quad_:draw()
-			root.Shader.pop_stack()
+				gl.Enable(gl.STENCIL_TEST)
+				gl.StencilFunc(gl.EQUAL, 0, 0xFF)
+				gl.StencilMask(0x00)
+				
+				self.sky_shader_:bind()
+				local local_camera = self.planet_.spherical_ and self.local_camera_ or camera
+				root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(local_camera.view_proj_origin_matrix))
+				root.Shader.get():uniform("u_LocalWorldPos", local_camera.position)
+				root.Shader.get():uniform("u_SunDirection", self.planet_.sun_:get_direction())
+				self.planet_.atmosphere_:bind(1000)
+				
+				gl.ActiveTexture(gl.TEXTURE0)
+				root.Shader.get():sampler("s_Clouds", 0)
+				self.clouds_tex_:bind()
+				
+				self.screen_quad_:draw()
+				root.Shader.pop_stack()
+				
+				gl.Disable(gl.STENCIL_TEST)
+			end
 		end
-    
+		
+		local deferred_transparent_pass = function()
+		
+			gl.Enable(gl.BLEND)
+			gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+			gl.Enable(gl.DEPTH_TEST)	
+			
+			-- draw sectors transparent objects
+			local local_camera = self.planet_.spherical_ and self.local_camera_ or camera
+			for i = 1, table.getn(self.planet_.active_sectors_) do
+				local sector = self.planet_.active_sectors_[i]
+				for j = 1, table.getn(sector.objects_) do
+					 sector.objects_[j]:draw_transparent(local_camera)
+				end
+			end
+			
+			gl.Disable(gl.DEPTH_TEST)
+			gl.Disable(gl.STENCIL_TEST)
+			gl.Disable(gl.BLEND)
+		end
+		
         local deferred_lights_pass = function()
             
+			gl.Enable(gl.BLEND)
             gl.BlendFunc(gl.ONE, gl.ONE)
-            gl.Enable(gl.BLEND)
             gl.Enable(gl.CULL_FACE)
 			
+			gl.Enable(gl.STENCIL_TEST)
+			gl.StencilFunc(gl.NOTEQUAL, 0, 0xFF)
+			gl.StencilMask(0x00)
+			
 			local light_pass = function(light)
-			
-				gl.StencilFunc(gl.NOTEQUAL, 0, 0xFF)
-				gl.StencilMask(0x00)
-			
+				
 				light.shader_:bind()
-				root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(camera.view_proj_matrix))
-				root.Shader.get():uniform("u_WorldCamPosition", camera.position)
+				
+				local local_camera = self.planet_.spherical_ and self.local_camera_ or camera			
+				root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(local_camera.view_proj_matrix))
+				root.Shader.get():uniform("u_WorldCamPosition", local_camera.position)
 			
 				gl.ActiveTexture(gl.TEXTURE0)
 				root.Shader.get():sampler("s_Tex0", 0)
@@ -455,14 +515,15 @@ function render_pipeline:render(dt, camera)
 				root.Shader.get():sampler("s_Tex3", 3)
 				self.occlusion_tex_:bind()
 			
-				light:__draw_light(camera)
+				light:draw_light(local_camera)
 				root.Shader.pop_stack()
 			end
             
-			-- draw planet global lights
+			-- draw planet global lights (skip global envprobe)
             for i = 1, table.getn(self.planet_.objects_) do
-                if self.planet_.objects_[i].is_light_ then
-					light_pass(self.planet_.objects_[i])
+				local object = self.planet_.objects_[i]
+                if object.is_light_ and object.type_id_ ~= ID_ENVPROBE then
+					light_pass(object)
                 end
             end
 			
@@ -475,62 +536,82 @@ function render_pipeline:render(dt, camera)
 					 end
 				end
 			end
-            
-            gl.Disable(gl.BLEND)
+			
+			-- draw global envprobe last
+			light_pass(self.planet_.global_envprobe_)
+			
             gl.Disable(gl.CULL_FACE)
+			gl.Disable(gl.STENCIL_TEST)
+			gl.Disable(gl.BLEND)
         end
-        
-		self.planet_.sun_:generate_shadow(camera)
-		self.planet_.global_probe_:generate()
+		
+		local local_camera = self.planet_.spherical_ and self.local_camera_ or camera
+		self.planet_.sun_:generate_shadow(local_camera)
 		generate_occlusion()
-        generate_volumetric_clouds()
-    
+		generate_volumetric_clouds()
+		
         self.render_fbo_:clear()
         self.render_fbo_:attach(self.gbuffer_depth_tex_, gl.DEPTH_STENCIL_ATTACHMENT)
         self.render_fbo_:attach(self.render_tex_, gl.COLOR_ATTACHMENT0)
         self.render_fbo_:bind_output()
-        
+		
         gl.ClearColor(root.Color.Black)
         gl.Clear(gl.COLOR_BUFFER_BIT)      
-        gl.Enable(gl.STENCIL_TEST)
-        
-        deferred_sky_pass()
-        deferred_lights_pass()
-		
-        gl.Disable(gl.STENCIL_TEST)  
-        root.FrameBuffer.unbind()
+
+		deferred_sky_pass()
+		deferred_transparent_pass()
+		deferred_lights_pass()
+	
+        gl.Disable(gl.STENCIL_TEST)
 		
 		self:process_bloom(self.render_tex_)
-		root.FrameBuffer.unbind()
-    end
-    
-    local final_pass = function()
+        root.FrameBuffer.unbind()
+	end
 	
-		local final_tex = self:perform_smaa(self.render_tex_, self.render_smaa_tex_)
-		root.FrameBuffer.unbind()   
-        self.final_shader_:bind()
-		
-        root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(camera.view_proj_matrix))
-        root.Shader.get():uniform("u_PrevViewProjMatrix", self.prev_view_proj_matrix_)  
-        root.Shader.get():uniform("u_MotionScale", (1.0 / 60.0) / dt)
-        self.prev_view_proj_matrix_ = mat4(camera.view_proj_matrix)
+    local final_pass = function()
 
-        gl.ActiveTexture(gl.TEXTURE0)
-        root.Shader.get():sampler("s_Tex0", 0)
-        self.gbuffer_depth_tex_:bind()
-        
-        gl.ActiveTexture(gl.TEXTURE1)
-        root.Shader.get():sampler("s_Tex1", 1)
-        final_tex:bind()
-        
-        self.screen_quad_:draw()
-        root.Shader.pop_stack()
+		local final_tex = self:perform_smaa(self.render_tex_, self.render_smaa_tex_)
 		
-		self:process_lensflare(camera, final_tex)
+        self.render_fbo_:clear()
+        self.render_fbo_:attach(self.final_tex_, gl.COLOR_ATTACHMENT0)
+        self.render_fbo_:bind_output()
+		
+		local local_camera = self.planet_.spherical_ and self.local_camera_ or camera
+		if not self.planet_.enable_logz_ then
+		
+			self.final_shader_:bind()		
+			root.Shader.get():uniform("u_InvViewProjMatrix", math.inverse(local_camera.view_proj_matrix))
+			root.Shader.get():uniform("u_PrevViewProjMatrix", self.prev_view_proj_matrix_)  
+			root.Shader.get():uniform("u_MotionScale", (1.0 / 60.0) / dt)
+			self.prev_view_proj_matrix_ = mat4(local_camera.view_proj_matrix)
+			
+			gl.ActiveTexture(gl.TEXTURE0)
+			root.Shader.get():sampler("s_Tex0", 0)
+			self.gbuffer_depth_tex_:bind()
+			
+			gl.ActiveTexture(gl.TEXTURE1)
+			root.Shader.get():sampler("s_Tex1", 1)
+			final_tex:bind()
+			
+			self.screen_quad_:draw()
+			root.Shader.pop_stack()
+		else	
+		
+			gl.ActiveTexture(gl.TEXTURE0)
+			root.Shader.get():uniform("u_RenderingType", 2)
+			root.Shader.get():sampler("s_Tex0", 0)
+			final_tex:bind()
+			
+			self.screen_quad_:draw()
+		end
+		
+		self:process_lensflare(local_camera, self.final_tex_)
 		root.FrameBuffer.unbind()
     end
-    
-    gbuffer_pass()
-    deferred_pass()
-    final_pass()	
+	
+	gbuffer_pass()
+	deferred_pass()
+	final_pass()
+
+	return self.final_tex_
 end
